@@ -1,0 +1,10 @@
+### 방 생성 API 테스트
+POST http://localhost:8080/api/rooms
+Content-Type: application/json
+
+{
+  "title": "제주도 여행 정산방",
+  "baseCurrency": "KRW",
+  "pin": "1234",
+  "memberNames": ["철수", "영희", "민수"]
+}
