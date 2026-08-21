@@ -26,9 +26,12 @@ public class RoomService {
         String slug = UUID.randomUUID().toString();
 
         // 2. Room 엔티티 조립 및 DB 저장
+        // 기준 통화 코드를 대문자로 변환
+        String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
+
         Room room = Room.builder()
                 .title(request.getTitle())
-                .baseCurrency(request.getBaseCurrency())
+                .baseCurrency(sanitizedCurrency)
                 .pin(request.getPin())
                 .slug(slug)
                 .build();
@@ -43,10 +46,13 @@ public class RoomService {
         // 4. Full URL 생성 및 응답 반환
         String fullUrl = "https://splitlink.com/rooms/" + slug;
 
+        log.info("fullUrl:{}", fullUrl);
+
         return RoomCreateResponse.builder()
                 .slug(slug)
                 .fullUrl(fullUrl)
                 .title(room.getTitle())
+                .baseCurrency(room.getBaseCurrency())
                 .pin(room.getPin())
                 .memberNames(request.getMemberNames())
                 .build();
