@@ -1,0 +1,35 @@
+### 1. 방 생성 요청
+POST http://localhost:8080/api/rooms
+Content-Type: application/json
+
+{
+  "title": "제주도 여행 정산방",
+  "baseCurrency": "KRW",
+  "pin": "Pass123",
+  "memberNames": ["기영", "기철", "오덕"]
+}
+
+> {%
+    // 생성된 slug를 변수에 저장 (다음 요청에서 활용)
+    client.global.set("room_slug", response.body.data.slug);
+%}
+
+### 2. 방 요약 정보 조회 (입장코드 입력 페이지용)
+GET http://localhost:8080/api/rooms/{{room_slug}}/summary
+Content-Type: application/json
+
+### 3. 방 입장코드(PIN) 검증 및 상세 정보 조회 (성공 시나리오)
+POST http://localhost:8080/api/rooms/{{room_slug}}/access
+Content-Type: application/json
+
+{
+  "pin": "Pass123"
+}
+
+### 4. 방 입장코드(PIN) 검증 실패 테스트 (실패 시나리오 - 400 Bad Request)
+POST http://localhost:8080/api/rooms/{{room_slug}}/access
+Content-Type: application/json
+
+{
+  "pin": "WrongPin"
+}
