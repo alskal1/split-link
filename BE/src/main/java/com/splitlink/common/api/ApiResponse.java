@@ -25,4 +25,9 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(int status, String message) {
         return new ApiResponse<>(false, status, message, null);
     }
+
+    // 에러 데이터를 할게 보내는 메서드
+    public static <T> ApiResponse<T> error(int status, String message, T data) {
+        return new ApiResponse<>(false, status, message, data);
+    }
 }

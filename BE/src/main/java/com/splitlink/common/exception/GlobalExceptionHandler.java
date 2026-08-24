@@ -8,6 +8,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.List;
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -32,12 +34,22 @@ public class GlobalExceptionHandler {
 
     // 3. 유효성 검사 오류 (자동 검증 실패)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiResponse<List<CustomFieldError>>> handleValidationException(MethodArgumentNotValidException e) {
         log.warn("Validation Exception: {}", e.getMessage());
 
-        String errorMessage = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(400, errorMessage));
+        List<CustomFieldError> fieldErrors = e.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(CustomFieldError::of)
+                .toList();
+
+        ApiResponse<List<CustomFieldError>> response = ApiResponse.error(
+                HttpStatus.BAD_REQUEST.value(),
+                "입력값 유효성 검증에 실패했습니다.",
+                fieldErrors
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     // 4. 서버 내부 오류

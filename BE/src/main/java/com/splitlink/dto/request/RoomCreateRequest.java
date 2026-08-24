@@ -19,7 +19,8 @@ public class RoomCreateRequest {
     @NotBlank(message = "방 제목은 필수입니다.") // 필수 값, 공백 금지
     private String title;
 
-    @Size(min = 3, max = 3, message = "통화 코드는 3글자여야 합니다.") // 예: KRW
+    @NotBlank(message = "기준 통화는 필수입니다.")
+    @Size(min = 3, max = 3, message = "기준 통화는 3글자여야 합니다.") // 예: KRW
     private String baseCurrency;
 
     @NotBlank(message = "핀 번호는 필수입니다.")

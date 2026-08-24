@@ -1,4 +1,4 @@
-### 방 생성 API 테스트
+### 방 생성 성공
 POST http://localhost:8080/api/rooms
 Content-Type: application/json
 
@@ -6,5 +6,28 @@ Content-Type: application/json
   "title": "제주도 여행 정산방",
   "baseCurrency": "KRW",
   "pin": "1234",
+  "memberNames": ["철수", "영희"]
+}
+
+### 방 생성 실패 - 방 기본 통화 잘못된 입력
+POST http://localhost:8080/api/rooms
+Content-Type: application/json
+
+{
+  "title": "제주도 여행 정산방",
+  "baseCurrency": "s",
+  "pin": "1234",
   "memberNames": ["철수", "영희", "민수"]
+}
+
+### 방 생성 실패 - Validation 에러 (빈 값 & 형식 오류)
+POST http://localhost:8080/api/rooms
+Content-Type: application/json
+
+{
+  "title": "",
+  "baseCurrency": "",
+  "pin": "",
+  "memberNames": []
+
 }
