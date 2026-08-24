@@ -1,10 +1,11 @@
-import "./App.css";
+import Layout from "./MainLayout";
+import MainPage from "./pages/MainPage";
 
 function App() {
   return (
-    <>
-      <div>SplitLink</div>
-    </>
+    <Layout>
+      <MainPage></MainPage>
+    </Layout>
   );
 }
 
