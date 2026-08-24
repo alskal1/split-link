@@ -1,7 +1,10 @@
 package com.splitlink.service;
 
+import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
+import com.splitlink.dto.response.RoomDetailResponse;
+import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Room;
 import com.splitlink.mapper.RoomMapper;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 방 생성, 조회, 입장코드 검증 등 핵심 비즈니스 로직을 수행하는 서비스
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,6 +25,11 @@ public class RoomService {
 
     private final RoomMapper roomMapper;
 
+    /**
+     * 방 및 초기 멤버를 생성
+     *
+     * @throws IllegalArgumentException 멤버 이름이 비어있거나 중복된 이름이 있을 경우
+     */
     @Transactional
     public RoomCreateResponse createRoom(RoomCreateRequest request) {
         log.info("RoomService:createRoom 진입");
@@ -67,5 +78,58 @@ public class RoomService {
                 .pin(room.getPin())
                 .memberNames(sanitizedMembers)
                 .build();
+    }
+
+    /**
+     * slug 기반으로 방 요약 정보(제목, 멤버 수, 멤버 목록) 조회
+     *
+     * @throws IllegalArgumentException 존재하지 않는 방일 경우
+     */
+    @Transactional(readOnly = true)
+    public RoomSummaryResponse getRoomSummary(String slug) {
+        // slug 기준 요약 정보 조회
+        RoomSummaryResponse response = roomMapper.findSummaryBySlug(slug);
+
+        // 존재하지 않는 방이라면 예외 발생
+        if (response == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+
+        int count = (response.getMemberNames() != null) ? response.getMemberNames().size() : 0;
+        response.setMemberCount(count);
+
+        return response;
+    }
+
+    /**
+     * 입장코드 일치 여부를 검증한 후 방 상세 정보를 반환
+     *
+     * @throws IllegalArgumentException 방이 존재하지 않거나 입장코드가 일치하지 않을 경우
+     */
+    @Transactional(readOnly = true)
+    public RoomDetailResponse accessRoom(String slug, RoomAccessRequest request) {
+        log.info("RoomService:accessRoom 진입- slug: {}", slug);
+
+        // 입장코드 검증을 위한 DB의 정답 입장코드 조회
+        String realPin = roomMapper.findPinBySlug(slug);
+
+        // 해당 방 존재 여부 확인
+        if (realPin == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+
+        // 입장코드 일치 여부 확인
+        if (!realPin.equals(request.getPin())) {
+            throw new IllegalArgumentException("입장 코드가 일치하지 않습니다.");
+        }
+
+        // 상세 정보 조회
+        RoomDetailResponse response = roomMapper.findDetailBySlug(slug);
+
+        if (response == null) {
+            throw new IllegalArgumentException("방 상세 정보를 불러올 수 없습니다.");
+        }
+
+        return response;
     }
 }
