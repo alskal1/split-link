@@ -1,6 +1,8 @@
 spring:
   application:
     name: split-link
+  profiles:
+    active: local
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/split_link?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul

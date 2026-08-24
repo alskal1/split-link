@@ -16,8 +16,18 @@ public class ApiResponse<T> {
         return new ApiResponse<>(true, 200, "SUCCESS", data);
     }
 
+    // 커스텀 성공 (상태코드 다르게 줄 때)
+    public static <T> ApiResponse<T> success(int status,T data) {
+        return new ApiResponse<>(true, status, "SUCCESS", data);
+    }
+
     // 실패(에러)했을 때 쓰는 정적 팩토리 메서드
     public static <T> ApiResponse<T> error(int status, String message) {
         return new ApiResponse<>(false, status, message, null);
+    }
+
+    // 에러 데이터를 할게 보내는 메서드
+    public static <T> ApiResponse<T> error(int status, String message, T data) {
+        return new ApiResponse<>(false, status, message, data);
     }
 }
