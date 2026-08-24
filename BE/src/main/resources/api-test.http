@@ -31,3 +31,15 @@ Content-Type: application/json
   "memberNames": []
 
 }
+
+### 방 생성 실패 - 이름 중복
+POST http://localhost:8080/api/rooms
+Content-Type: application/json
+
+{
+  "title": "일본 여행 정산",
+  "baseCurrency": "krw",
+  "pin": "12345",
+  "memberNames": ["철수", "철수"]
+
+}

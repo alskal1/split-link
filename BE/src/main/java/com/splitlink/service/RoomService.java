@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -39,22 +40,32 @@ public class RoomService {
         roomMapper.insertRoom(room);
 
         // 3. 방금 채워진 roomId를 꺼내서 멤버들 일괄 저장
-        // 일단 멤버별 color 은 제외함
         Long generatedRoomId = room.getRoomId();
-        roomMapper.insertMembers(generatedRoomId, request.getMemberNames());
 
-        // 4. Full URL 생성 및 응답 반환
-        String fullUrl = "https://splitlink.com/rooms/" + slug;
+        // 공백 제거 및 중복 검증 예시
+        List<String> sanitizedMembers = request.getMemberNames().stream()
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .toList();
 
-        log.info("fullUrl:{}", fullUrl);
+        if (sanitizedMembers.isEmpty()) {
+            throw new IllegalArgumentException("멤버 이름을 최소 한 명 이상 입력해야 합니다.");
+        }
 
+        long uniqueCount = sanitizedMembers.stream().distinct().count();
+        if (uniqueCount != sanitizedMembers.size()) {
+            throw new IllegalArgumentException("방 멤버 이름은 중복될 수 없습니다.");
+        }
+
+        roomMapper.insertMembers(generatedRoomId, sanitizedMembers);
+
+        // 4. 응답 반환
         return RoomCreateResponse.builder()
                 .slug(slug)
-                .fullUrl(fullUrl)
                 .title(room.getTitle())
                 .baseCurrency(room.getBaseCurrency())
                 .pin(room.getPin())
-                .memberNames(request.getMemberNames())
+                .memberNames(sanitizedMembers)
                 .build();
     }
 }

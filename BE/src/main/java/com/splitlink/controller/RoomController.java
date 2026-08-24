@@ -28,25 +28,4 @@ public class RoomController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(201, response));
     }
-//
-//    // 방 단건 조회 (Read)
-//    @GetMapping("/{roomId}")
-//    public ApiResponse<RoomResponseDto> getRoom(@PathVariable Long roomId) {
-//        RoomResponseDto room = roomService.getRoom(roomId);
-//        return ApiResponse.success(room);
-//    }
-//
-//    // 방 수정 (Update)
-//    @PatchMapping("/{roomId}")
-//    public ApiResponse<Void> updateRoom(@PathVariable Long roomId, @RequestBody RoomUpdateRequest request) {
-//        roomService.modifyRoom(roomId, request);
-//        return ApiResponse.success(null);
-//    }
-//
-//    // 방 삭제 (Delete)
-//    @DeleteMapping("/{roomId}")
-//    public ApiResponse<Void> deleteRoom(@PathVariable Long roomId) {
-//        roomService.removeRoom(roomId);
-//        return ApiResponse.success(null);
-//    }
 }
