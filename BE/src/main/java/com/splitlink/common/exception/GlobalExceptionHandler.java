@@ -10,11 +10,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 
+/**
+ * 전역 예외 처리를 담당하는 컨트롤러 어드바이스
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1. 잘못된 요청 (400)
+    /**
+     * 비즈니스 로직 및 입력값 관련 예외 처리 (HTTP 400 Bad Request)
+     *
+     * @param e IllegalArgumentException 객체
+     * @return 400 상태 코드와 에러 메세지를 담은 ApiResponse
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
         log.warn("Business Exception: {}", e.getMessage());
@@ -23,7 +31,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    // 2. 권한 없음 (403)
+    /**
+     * 권한 및 보안 관련 예외 처리 (HTTP 403 Forbidden)
+     *
+     * @param e SecurityException 객체
+     * @return 403 상태 코드와 에러 메세지를 담은 ApiResponse
+     */
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<ApiResponse<Void>> handleSecurityException(SecurityException e) {
         log.warn("Security Exception: {}", e.getMessage());
@@ -32,7 +45,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
-    // 3. 유효성 검사 오류 (자동 검증 실패)
+    /**
+     * DTO 유효성 검증(@Valid) 실패 예외 처리 (HTTP 400 Bad Request)
+     *
+     * @param e MethodArgumentNotValidException 객체
+     * @return 400 상태 코드와 필드별 에러 상세 목록(CustomFieldError)을 담은 ApiResponse
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<List<CustomFieldError>>> handleValidationException(MethodArgumentNotValidException e) {
         log.warn("Validation Exception: {}", e.getMessage());
@@ -52,7 +70,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    // 4. 서버 내부 오류
+    /**
+     * 서서 내부 예기치 못한 최상위 예외 처리 (HTTP 500 Internal Server Error)
+     *
+     * @param e Exception 객체
+     * @return 500 상태 코드와 공통 에러 메시지를 담은 ApiResponse
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAllException(Exception e) {
         log.error("Unexpected Server Error: {}", e.getMessage());

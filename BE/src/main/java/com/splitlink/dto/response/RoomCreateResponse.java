@@ -7,14 +7,27 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * 방 생성 성공 응답 DTO
+ */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class RoomCreateResponse {
-    private String slug;                // 주소 이동 및 식별용
-    private String title;               // 화면 상단 방 이름 렌더링용
-    private String baseCurrency;        // 기준 통화 코드
-    private String pin;                 // 생성된 방의 핀 번호 확인용
-    private List<String> memberNames;   // 방에 포함된 멤버 목록 렌더링용
+
+    /** 방 고유 식별자 (페이지 이동 및 라우팅용 UUID) */
+    private String slug;
+
+    /** 방 제목 */
+    private String title;
+
+    /** 기준 통화 (예: KRW, USD) */
+    private String baseCurrency;
+
+    /** 입장코드 PIN 번호 (생성 결과 확인용) */
+    private String pin;
+
+    /** 등록된 멤버 이름 목록 */
+    private List<String> memberNames;
 }
