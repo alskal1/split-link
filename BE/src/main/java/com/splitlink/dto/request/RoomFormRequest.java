@@ -18,7 +18,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RoomCreateRequest {
+public class RoomFormRequest {
 
     /** 방 제목 */
     @NotBlank(message = "방 제목은 필수입니다.") // 필수 값, 공백 금지

@@ -41,7 +41,7 @@ public class ApiResponse<T> {
      * @param data 클라이언트에 전달할 실제 데이터
      * @return 커스텀 상태 코드를 가지는 성공 ApiResponse 객체
      */
-    public static <T> ApiResponse<T> success(int status,T data) {
+    public static <T> ApiResponse<T> success(int status, T data) {
         return new ApiResponse<>(true, status, "SUCCESS", data);
     }
 

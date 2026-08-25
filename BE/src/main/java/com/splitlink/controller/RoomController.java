@@ -2,7 +2,7 @@ package com.splitlink.controller;
 
 import com.splitlink.common.api.ApiResponse;
 import com.splitlink.dto.request.RoomAccessRequest;
-import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomFormRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -29,7 +29,7 @@ public class RoomController {
      * 새로운 방 생성
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<RoomCreateResponse>> createRoom(@Valid @RequestBody RoomCreateRequest request) {
+    public ResponseEntity<ApiResponse<RoomCreateResponse>> createRoom(@Valid @RequestBody RoomFormRequest request) {
         log.info("RoomController:createRoom 진입");
 
         RoomCreateResponse response = roomService.createRoom(request);
@@ -60,6 +60,22 @@ public class RoomController {
         log.info("RoomController:getRoomAccess 진입 - slug: {}", slug);
 
         RoomDetailResponse response = roomService.accessRoom(slug, request);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 방 수정 (제목, 기준통화, 입장코드, 멤버)
+     * 해당 값을 다 가지고 오며, 멤버는 이름 리스트로만 들어온다.
+     * 이름 리스트는 전체 삭제 후 등록 진행.
+     */
+    @PatchMapping("/{slug}")
+    public ResponseEntity<ApiResponse<RoomDetailResponse>> updateRoom(
+            @PathVariable String slug,
+            @Valid @RequestBody RoomFormRequest request) {
+        log.info("RoomController:updateRoom 진입 - slug: {}", slug);
+
+        RoomDetailResponse response = roomService.updateRoom(slug, request);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }

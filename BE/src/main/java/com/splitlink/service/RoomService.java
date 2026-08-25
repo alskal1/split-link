@@ -1,7 +1,7 @@
 package com.splitlink.service;
 
 import com.splitlink.dto.request.RoomAccessRequest;
-import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomFormRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -31,7 +31,7 @@ public class RoomService {
      * @throws IllegalArgumentException 멤버 이름이 비어있거나 중복된 이름이 있을 경우
      */
     @Transactional
-    public RoomCreateResponse createRoom(RoomCreateRequest request) {
+    public RoomCreateResponse createRoom(RoomFormRequest request) {
         log.info("RoomService:createRoom 진입");
 
         // 1. Slug 생성
@@ -131,5 +131,13 @@ public class RoomService {
         }
 
         return response;
+    }
+
+    @Transactional
+    public RoomDetailResponse updateRoom(String slug, RoomFormRequest request) {
+        log.info("RoomService:updateRoom 진입 - slug: {}", slug);
+
+        // TODO: 추후 방 수정(Delete-then-Insert) 로직 구현 예정
+        return null;
     }
 }

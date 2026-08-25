@@ -1,7 +1,7 @@
 package com.splitlink.service;
 
 import com.splitlink.dto.request.RoomAccessRequest;
-import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomFormRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -37,7 +36,7 @@ public class RoomServiceTest {
     @DisplayName("방 생성 테스트")
     void createRoomTest() {
         // given: 방 생성 요청 DTO 준비
-        RoomCreateRequest request = RoomCreateRequest.builder()
+        RoomFormRequest request = RoomFormRequest.builder()
                 .title("테스트 방제목")
                 .baseCurrency("KRW")
                 .pin("Test11")
@@ -62,7 +61,7 @@ public class RoomServiceTest {
     @DisplayName("slug 기반 방 요약 정보 조회 테스트")
     void getRoomSummaryTest() {
         // given
-        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+        RoomFormRequest createRequest = RoomFormRequest.builder()
                 .title("요약 테스트방")
                 .baseCurrency("KRW")
                 .pin("Pass123")
@@ -88,7 +87,7 @@ public class RoomServiceTest {
     @DisplayName("PIN 번호 일치 시 방 상세 정보 반환 테스트")
     void accessRoomSuccessTest() {
         // given
-        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+        RoomFormRequest createRequest = RoomFormRequest.builder()
                 .title("입장 테스트방")
                 .baseCurrency("KRW")
                 .pin("Pass123")
@@ -116,7 +115,7 @@ public class RoomServiceTest {
     @DisplayName("PIN 번호 불일치 시 IllegalArgumentExcepion 예외 발생 테스트")
     void accessRoomFailWrongPinTest() {
         // given
-        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+        RoomFormRequest createRequest = RoomFormRequest.builder()
                 .title("PIN 실패 테스트")
                 .baseCurrency("KRW")
                 .pin("Pass123")
