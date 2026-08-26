@@ -51,7 +51,7 @@ public class RoomController {
     }
 
     /**
-     * 입장코드를 검증하고, 일치할 경우 방 상세 정보 반환한
+     * 입장코드를 검증하고, 일치할 경우 방 상세 정보 반환
      */
     @PostMapping("/{slug}/access")
     public ResponseEntity<ApiResponse<RoomDetailResponse>> getRoomAccess(
@@ -69,7 +69,7 @@ public class RoomController {
      * 해당 값을 다 가지고 오며, 멤버는 이름 리스트로만 들어온다.
      * 이름 리스트는 전체 삭제 후 등록 진행.
      */
-    @PatchMapping("/{slug}")
+    @PutMapping("/{slug}")
     public ResponseEntity<ApiResponse<RoomDetailResponse>> updateRoom(
             @PathVariable String slug,
             @Valid @RequestBody RoomFormRequest request) {
