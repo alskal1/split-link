@@ -13,7 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * RoomService 통합 테스트
@@ -128,7 +129,68 @@ public class RoomServiceTest {
                 .build();
 
         // when & then
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> roomService.accessRoom(createResponse.getSlug(), wrongAccessRequest));
+    }
+
+    /**
+     * 방 정보 수정 성공 테스트 (PUT)
+     */
+    @Test
+    @DisplayName("방 정보 수정 성공 테스트 - 제목, 기준통화, 입장코드, 참여자 목록이 정상 수정된다")
+    void updateRoomSuccessTest() {
+        // given
+        RoomFormRequest createRequest = RoomFormRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 수정 요청 DTO 준비
+        RoomFormRequest updateRequest = RoomFormRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("usd")
+                .pin("NewPass12")
+                .memberNames(List.of("지용", "대성"))
+                .build();
+
+        // when: 방 수정 호출
+        RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), updateRequest);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.getTitle()).isEqualTo("수정된 방제목");
+        assertThat(response.getBaseCurrency()).isEqualTo("USD");
+        assertThat(response.getMembers()).extracting("name").containsExactly("지용", "대성");
+    }
+
+    /**
+     * 방 정보 수정 실패 테스트 - 멤버 이름이 중복
+     */
+    @Test
+    @DisplayName("방 정보 수정 시 멤버 이름에 중복이 있으면 400 예외 발생")
+    void updateRoomFailDuplicateMemberTest() {
+        // given
+        RoomFormRequest createRequest = RoomFormRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 중복된 이름이 포함된 수정 요청
+        RoomFormRequest invalidUpdateRequest = RoomFormRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "지용"))
+                .build();
+
+        // when & then
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> roomService.updateRoom(createResponse.getSlug(), invalidUpdateRequest));
     }
 }
