@@ -169,6 +169,28 @@ public class RoomServiceTest {
     }
 
     /**
+     * 방 정보 수정 실패 테스트 - 존재하지 않는 slug로 요청 시 예외 발생
+     */
+    @Test
+    @DisplayName("존재하지 않는 slug로 방 정보 수정 요청 시 예외 발생")
+    void updateRoomFailRoomNotFoundTest() {
+        // given: 존재하지 않는 임의의 slug 및 수정 요청 DTO 준비
+        String invalidSlug = "non-existent-slug-12345";
+
+        RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+
+        // when & then: IllegalArgumentException 예외 발생 검증
+        assertThatThrownBy(() -> roomService.updateRoom(invalidSlug, updateRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당 방이 없습니다.");
+    }
+
+    /**
      * 방 정보 수정 실패 테스트 - 멤버 이름이 중복
      */
     @Test
