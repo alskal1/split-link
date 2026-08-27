@@ -2,7 +2,8 @@ package com.splitlink.controller;
 
 import com.splitlink.common.api.ApiResponse;
 import com.splitlink.dto.request.RoomAccessRequest;
-import com.splitlink.dto.request.RoomFormRequest;
+import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -29,7 +30,7 @@ public class RoomController {
      * 새로운 방 생성
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<RoomCreateResponse>> createRoom(@Valid @RequestBody RoomFormRequest request) {
+    public ResponseEntity<ApiResponse<RoomCreateResponse>> createRoom(@Valid @RequestBody RoomCreateRequest request) {
         log.info("RoomController:createRoom 진입");
 
         RoomCreateResponse response = roomService.createRoom(request);
@@ -72,7 +73,7 @@ public class RoomController {
     @PutMapping("/{slug}")
     public ResponseEntity<ApiResponse<RoomDetailResponse>> updateRoom(
             @PathVariable String slug,
-            @Valid @RequestBody RoomFormRequest request) {
+            @Valid @RequestBody RoomUpdateRequest request) {
         log.info("RoomController:updateRoom 진입 - slug: {}", slug);
 
         RoomDetailResponse response = roomService.updateRoom(slug, request);

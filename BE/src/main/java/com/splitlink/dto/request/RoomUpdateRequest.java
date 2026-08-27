@@ -11,15 +11,11 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * 방 생성 요청 DTO
- */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RoomFormRequest {
-
+public class RoomUpdateRequest {
     /** 방 제목 */
     @NotBlank(message = "방 제목은 필수입니다.") // 필수 값, 공백 금지
     private String title;
@@ -29,10 +25,12 @@ public class RoomFormRequest {
     @Size(min = 3, max = 3, message = "기준 통화는 3글자여야 합니다.") // 예: KRW
     private String baseCurrency;
 
-    /** 입장코드 PIN 번호 (영대소문자/숫자 4~10자리) */
+    /** 기존 입장코드 PIN 번호 (권한 확인용 필수값) */
     @NotBlank(message = "핀 번호는 필수입니다.")
-    @Pattern(regexp = "^[a-zA-Z0-9]{4,10}$", message = "입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.")
     private String pin;
+
+    /** 새로운 입장코드 PIN 번호 (선택값: 입력 시 변경, 미입력 시 유지) */
+    private String newPin;
 
     /** 참여 멤버 이름 목록 */
     @NotEmpty(message = "최소 한 명 이상의 멤버가 필요합니다.")

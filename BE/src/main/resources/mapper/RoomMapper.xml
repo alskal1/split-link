@@ -92,9 +92,9 @@
     <update id="updateRoom">
         UPDATE rooms
         SET
-            title = #{request.title},
+            title = #{title},
             base_currency = #{baseCurrency},
-            pin = #{request.pin}
+            pin = #{targetPin}
         WHERE slug = #{slug}
     </update>
 </mapper>

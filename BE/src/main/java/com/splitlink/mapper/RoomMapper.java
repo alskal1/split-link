@@ -1,6 +1,7 @@
 package com.splitlink.mapper;
 
-import com.splitlink.dto.request.RoomFormRequest;
+import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Room;
@@ -30,6 +31,7 @@ public interface RoomMapper {
 
     /** 방 정보 수정 */
     int updateRoom(@Param("slug") String slug,
+                   @Param("title") String title,
                    @Param("baseCurrency") String baseCurrency,
-                   @Param("request") RoomFormRequest request);
+                   @Param("targetPin") String targetPin);
 }

@@ -1,7 +1,8 @@
 package com.splitlink.service;
 
 import com.splitlink.dto.request.RoomAccessRequest;
-import com.splitlink.dto.request.RoomFormRequest;
+import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -27,13 +28,15 @@ public class RoomService {
     private final RoomMapper roomMapper;
     private final MemberMapper memberMapper;
 
+    private static final String PIN_REGEX = "^[a-zA-Z0-9]{4,10}$";
+
     /**
      * 방 및 초기 멤버를 생성
      *
      * @throws IllegalArgumentException 멤버 이름이 비어있거나 중복된 이름이 있을 경우
      */
     @Transactional
-    public RoomCreateResponse createRoom(RoomFormRequest request) {
+    public RoomCreateResponse createRoom(RoomCreateRequest request) {
         log.info("RoomService:createRoom 진입");
 
         // 참여자 이름 유효성 검증
@@ -126,13 +129,30 @@ public class RoomService {
      * (제목, 기준통화, 입장코드, 멤버)
      */
     @Transactional
-    public RoomDetailResponse updateRoom(String slug, RoomFormRequest request) {
+    public RoomDetailResponse updateRoom(String slug, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
         // 해당 방이 있는가
-        Long roomId = roomMapper.findRoomIdBySlug(slug);
-        if (roomId == null) {
+        String realPin = roomMapper.findPinBySlug(slug);
+        if (realPin == null) {
             throw new IllegalArgumentException("해당 방이 없습니다.");
+        }
+
+        // 기존 입장코드 일치 여부 검증 (권한 확인)
+        if (!realPin.equals(request.getPin())) {
+            throw new IllegalArgumentException("기존 입장코드가 일치하지 않습니다.");
+        }
+
+        // 새 입장코드 유효성 검사
+        String targetPin = request.getPin();
+        if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
+            String trimmedNewPin = request.getNewPin().trim();
+
+            if (!trimmedNewPin.matches(PIN_REGEX)) {
+                throw new IllegalArgumentException("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
+            }
+
+            targetPin = trimmedNewPin;
         }
 
         // 참여자 이름 목록 유효성 검사
@@ -142,18 +162,19 @@ public class RoomService {
         String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
 
         // 방 정보 수정
-        int updatedRows = roomMapper.updateRoom(slug, sanitizedCurrency, request);
+        int updatedRows = roomMapper.updateRoom(slug, request.getTitle(), sanitizedCurrency, targetPin);
         if (updatedRows == 0) {
             throw new IllegalArgumentException("존재하지 않거나 수정할 수 없는 방입니다.");
         }
 
-        // 참여자 목록 삭제
-        memberMapper.deleteMembersByRoomId(roomId);
+        // 참여자 삭제 및 재등록을 위한 roomId 조회
+        Long roomId = roomMapper.findRoomIdBySlug(slug);
 
-        // 참여자 목록 재등록
+        // 참여자 목록 전체 삭제 후 재등록
+        memberMapper.deleteMembersByRoomId(roomId);
         memberMapper.insertMembers(roomId, memberNames);
 
-        // 최신 상태 재조회
+        // 최신 상태 재조회 반환
         return roomMapper.findDetailBySlug(slug);
     }
 
