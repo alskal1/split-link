@@ -80,4 +80,19 @@ public class RoomController {
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    /**
+     * 방 삭제
+     * 기존 입장코드(PIN) 검증 후 방 및 관련 데이터를 일괄 삭제
+     */
+    @DeleteMapping("/{slug}")
+    public ResponseEntity<ApiResponse<Void>> deleteRoom(
+            @PathVariable String slug,
+            @Valid @RequestBody RoomAccessRequest request) {
+        log.info("RoomController:deleteRoom 진입 - slug: {}", slug);
+
+        roomService.deleteRoom(slug, request);
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

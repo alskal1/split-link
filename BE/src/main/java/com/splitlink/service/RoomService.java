@@ -32,8 +32,6 @@ public class RoomService {
 
     /**
      * 방 및 초기 멤버를 생성
-     *
-     * @throws IllegalArgumentException 멤버 이름이 비어있거나 중복된 이름이 있을 경우
      */
     @Transactional
     public RoomCreateResponse createRoom(RoomCreateRequest request) {
@@ -73,15 +71,14 @@ public class RoomService {
 
     /**
      * slug 기반으로 방 요약 정보(제목, 멤버 수, 멤버 목록) 조회
-     *
-     * @throws IllegalArgumentException 존재하지 않는 방일 경우
      */
     @Transactional(readOnly = true)
     public RoomSummaryResponse getRoomSummary(String slug) {
+        log.info("RoomService:getRoomSummary 진입 - slug: {}", slug);
+
         // slug 기준 요약 정보 조회
         RoomSummaryResponse response = roomMapper.findSummaryBySlug(slug);
 
-        // 존재하지 않는 방이라면 예외 발생
         if (response == null) {
             throw new IllegalArgumentException("존재하지 않는 방입니다.");
         }
@@ -94,27 +91,15 @@ public class RoomService {
 
     /**
      * 입장코드 일치 여부를 검증한 후 방 상세 정보를 반환
-     *
-     * @throws IllegalArgumentException 방이 존재하지 않거나 입장코드가 일치하지 않을 경우
      */
     @Transactional(readOnly = true)
     public RoomDetailResponse accessRoom(String slug, RoomAccessRequest request) {
         log.info("RoomService:accessRoom 진입- slug: {}", slug);
 
-        // 입장코드 검증을 위한 DB의 정답 입장코드 조회
-        String realPin = roomMapper.findPinBySlug(slug);
+        // 1. 입장코드 검증
+        validatePin(slug, request.getPin());
 
-        // 해당 방 존재 여부 확인
-        if (realPin == null) {
-            throw new IllegalArgumentException("존재하지 않는 방입니다.");
-        }
-
-        // 입장코드 일치 여부 확인
-        if (!realPin.equals(request.getPin())) {
-            throw new IllegalArgumentException("입장 코드가 일치하지 않습니다.");
-        }
-
-        // 상세 정보 조회
+        // 2. 상세 정보 조회
         RoomDetailResponse response = roomMapper.findDetailBySlug(slug);
 
         if (response == null) {
@@ -132,18 +117,10 @@ public class RoomService {
     public RoomDetailResponse updateRoom(String slug, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
-        // 해당 방이 있는가
-        String realPin = roomMapper.findPinBySlug(slug);
-        if (realPin == null) {
-            throw new IllegalArgumentException("해당 방이 없습니다.");
-        }
+        // 1. 입장코드 검증
+        validatePin(slug, request.getPin());
 
-        // 기존 입장코드 일치 여부 검증 (권한 확인)
-        if (!realPin.equals(request.getPin())) {
-            throw new IllegalArgumentException("기존 입장코드가 일치하지 않습니다.");
-        }
-
-        // 새 입장코드 유효성 검사
+        // 2. 입력값 유효성 검사
         String targetPin = request.getPin();
         if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
             String trimmedNewPin = request.getNewPin().trim();
@@ -155,33 +132,70 @@ public class RoomService {
             targetPin = trimmedNewPin;
         }
 
-        // 참여자 이름 목록 유효성 검사
         List<String> memberNames = validateAndSanitizeMembers(request.getMemberNames());
 
-        // 기준 통화 코드를 대문자로 변환
         String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
 
-        // 방 정보 수정
+        // 3. 방 정보 수정
         int updatedRows = roomMapper.updateRoom(slug, request.getTitle(), sanitizedCurrency, targetPin);
         if (updatedRows == 0) {
             throw new IllegalArgumentException("존재하지 않거나 수정할 수 없는 방입니다.");
         }
 
-        // 참여자 삭제 및 재등록을 위한 roomId 조회
+        // 4. 참여자 목록 전체 삭제 후 재등록
         Long roomId = roomMapper.findRoomIdBySlug(slug);
 
-        // 참여자 목록 전체 삭제 후 재등록
         memberMapper.deleteMembersByRoomId(roomId);
         memberMapper.insertMembers(roomId, memberNames);
 
-        // 최신 상태 재조회 반환
         return roomMapper.findDetailBySlug(slug);
+    }
+
+    /**
+     * 방 및 관련 데이터를 일괄 삭제
+     */
+    @Transactional
+    public void deleteRoom(String slug, RoomAccessRequest request) {
+        log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
+
+        // 1. 해당 방 존재 확인 및 입장코드 일치 검사
+        validatePin(slug, request.getPin());
+
+        // 2. 정산 완료 여부 확인 (Boolean.TRUE.equals로 null-safe 처리)
+        Boolean isClosed = roomMapper.findIsClosedBySlug(slug);
+        if (!Boolean.TRUE.equals(isClosed)) {
+            throw new IllegalArgumentException("해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.");
+        }
+
+        // 3. slug 기반 방 삭제 및 결과 안정성 검증 (정확히 1건 삭제되어야 함)
+        int deletedRows = roomMapper.deleteRoom(slug);
+        if (deletedRows != 1) {
+            throw new IllegalArgumentException("존재하지 않거나 삭제할 수 없는 방입니다.");
+        }
+    }
+
+    /**
+     * 방 존재 여부 및 입장코드 검증 공통 메서드
+     */
+    private void validatePin(String slug, String inputPin) {
+        log.info("RoomService:deleteRoom 진입 - slug: {}, inputPin: {}", slug, inputPin);
+
+        String realPin = roomMapper.findPinBySlug(slug);
+        if (realPin == null) {
+            throw new IllegalArgumentException("해당 방이 없습니다.");
+        }
+
+        if (!realPin.equals(inputPin)) {
+            throw new IllegalArgumentException("기존 입장코드가 일치하지 않습니다.");
+        }
     }
 
     /**
      * 멤버 이름 목록의 공백을 제거하고 유효성 및 중복 여부를 검증
      */
     private List<String> validateAndSanitizeMembers(List<String> rawMemberNames) {
+        log.info("RoomService:validateAndSanitizeMembers 진입");
+
         // 1. null 또는 빈 리스트 우선 검증
         if (rawMemberNames == null || rawMemberNames.isEmpty()) {
             throw new IllegalArgumentException("멤버 이름을 최소 한 명 이상 입력해야 합니다.");
