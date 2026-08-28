@@ -105,6 +105,11 @@
         WHERE slug = #{slug}
     </update>
 
+    <update id="updateIsClosedBySlug">
+        UPDATE rooms
+        SET is_closed = #{isClosed}
+        WHERE slug = #{slug}
+    </update>
     <!-- ================================================================= -->
     <!-- D: DELETE (삭제)                                                   -->
     <!-- ================================================================= -->

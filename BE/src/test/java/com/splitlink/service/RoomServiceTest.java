@@ -6,6 +6,7 @@ import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
+import com.splitlink.mapper.RoomMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * RoomService 통합 테스트
+ *
+ * [ AssertJ 예외 검증 패턴 정리 ]
+ * 1. 성공 케이스 (예외 미발생 검증):
+ *    assertThatCode(() -> 실행할_메서드)
+ *        .doesNotThrowAnyException();
+ *
+ * 2. 실패 케이스 (예외 발생 검증):
+ *    assertThatThrownBy(() -> 실행할_메서드)
+ *        .isInstanceOf(예외클래스.class)
+ *        .hasMessage("서비스에서_던지는_예외_메시지");
  */
 @SpringBootTest
 @Transactional
@@ -26,6 +37,9 @@ public class RoomServiceTest {
 
     @Autowired
     private RoomService roomService;
+
+    @Autowired
+    private RoomMapper roomMapper;
 
     /**
      * 방 생성 시나리오 테스트
@@ -313,5 +327,105 @@ public class RoomServiceTest {
         RoomAccessRequest accessRequest = RoomAccessRequest.builder().pin("1234").build();
         RoomDetailResponse accessResponse = roomService.accessRoom(createResponse.getSlug(), accessRequest);
         assertThat(accessResponse).isNotNull();
+    }
+
+    /**
+     * 방 삭제 성공 테스트
+     */
+    @Test
+    @DisplayName("정산이 완료된 방 삭제 성공 테스트")
+    void deleteRoomSuccessTest() {
+        // given 1. 방 생성
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("삭제 테스트방")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("A", "B"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+        String slug = createResponse.getSlug();
+
+        // 2. DB에서 정산 완료 상태로 변경
+        roomMapper.updateIsClosedBySlug(slug, true);
+
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder()
+                .pin("1234")
+                .build();
+
+        // 3. 삭제 수행 및 검증
+        assertThatCode(() -> roomService.deleteRoom(slug, accessRequest))
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * 방 삭제 실패 테스트 - 존재하지 않는 방(slug)
+     */
+    @Test
+    @DisplayName("존재하지 않는 방 삭제 시 '해당 방이 없습니다.' 예외 발생")
+    void deleteRoomFailRoomNotFoundTest() {
+        // given: 존재하지 않는 임의의 slug 및 요청 DTO 준비
+        String slug = "wrong-slug";
+
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder()
+                .pin("1234")
+                .build();
+
+        // 3. 삭제 수행 및 검증
+        assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당 방이 없습니다.");
+    }
+
+    /**
+     * 방 삭제 실패 테스트 - 입장코드가 틀린 경우
+     */
+    @Test
+    @DisplayName("입장코드가 틀릴 시 '기존 입장코드가 일치하지 않습니다.' 예외 발생")
+    void deleteRoomFailWrongPinTest() {
+        // given 1. 방 생성
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("삭제 테스트방")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("A", "B"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+        String slug = createResponse.getSlug();
+
+        // 2. 잘못된 pin 제공
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder()
+                .pin("wrongpin")
+                .build();
+
+        // 3. 삭제 수행 및 검증
+        assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("기존 입장코드가 일치하지 않습니다.");
+    }
+
+    /**
+     * 방 삭제 실패 - 정산 미완료 시 삭제
+     */
+    @Test
+    @DisplayName("정산 미완료 삭제 시 '해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.' 예외 발생")
+    void deleteRoomFailNotClosedTest() {
+        // given 1. 방 생성 (기본값 is_closed = false)
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("삭제 테스트방")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("A", "B"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+        String slug = createResponse.getSlug();
+
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder()
+                .pin("1234")
+                .build();
+
+        // 2. 정산 미완료 상태로 삭제 수행 및 검증
+        assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.");
     }
 }
