@@ -2,6 +2,7 @@ package com.splitlink.service;
 
 import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
+import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
@@ -13,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.as;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * RoomService 통합 테스트
@@ -129,7 +130,188 @@ public class RoomServiceTest {
                 .build();
 
         // when & then
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> roomService.accessRoom(createResponse.getSlug(), wrongAccessRequest));
+    }
+
+    /**
+     * 방 정보 수정 성공 테스트 (PUT)
+     */
+    @Test
+    @DisplayName("방 정보 수정 성공 테스트 - 제목, 기준통화, 입장코드, 참여자 목록이 정상 수정된다")
+    void updateRoomSuccessTest() {
+        // given
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 수정 요청 DTO 준비
+        RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("usd")
+                .pin("1234")
+                .newPin("NewPass12")
+                .memberNames(List.of("지용", "대성"))
+                .build();
+
+        // when: 방 수정 호출
+        RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), updateRequest);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.getTitle()).isEqualTo("수정된 방제목");
+        assertThat(response.getBaseCurrency()).isEqualTo("USD");
+        assertThat(response.getMembers()).extracting("name").containsExactly("지용", "대성");
+    }
+
+    /**
+     * 방 정보 수정 실패 테스트 - 존재하지 않는 slug로 요청 시 예외 발생
+     */
+    @Test
+    @DisplayName("존재하지 않는 slug로 방 정보 수정 요청 시 예외 발생")
+    void updateRoomFailRoomNotFoundTest() {
+        // given: 존재하지 않는 임의의 slug 및 수정 요청 DTO 준비
+        String invalidSlug = "non-existent-slug-12345";
+
+        RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+
+        // when & then: IllegalArgumentException 예외 발생 검증
+        assertThatThrownBy(() -> roomService.updateRoom(invalidSlug, updateRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당 방이 없습니다.");
+    }
+
+    /**
+     * 방 정보 수정 실패 테스트 - 멤버 이름이 중복
+     */
+    @Test
+    @DisplayName("방 정보 수정 시 멤버 이름에 중복이 있으면 400 예외 발생")
+    void updateRoomFailDuplicateMemberTest() {
+        // given
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 중복된 이름이 포함된 수정 요청
+        RoomUpdateRequest invalidUpdateRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .newPin(null)
+                .memberNames(List.of("지용", "지용"))
+                .build();
+
+        // when & then
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> roomService.updateRoom(createResponse.getSlug(), invalidUpdateRequest));
+    }
+
+    /**
+     * 방 정보 수정 실패 테스트 - 기존 PIN 번호 불일치
+     */
+    @Test
+    @DisplayName("방 정보 수정 시 기존 PIN 번호가 일치하지 않으면 예외 발생")
+    void updateRoomFailWrongPinTest() {
+        // given
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 틀린 기존 PIN으로 수정 요청
+        RoomUpdateRequest wrongPinRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("WrongPin") // 틀린 기존 PIN
+                .memberNames(List.of("지용", "태양"))
+                .build();
+
+        // when & then
+        assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), wrongPinRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("기존 입장코드가 일치하지 않습니다.");
+    }
+
+    /**
+     * 방 정보 수정 실패 테스트 - 새 PIN 규격 미달
+     */
+    @Test
+    @DisplayName("새 PIN 번호가 규격(영대소문자/숫자 4~10자리)에 맞지 않으면 예외 발생")
+    void updateRoomFailInvalidNewPinTest() {
+        // given
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 잘못된 규격의 새 PIN 요청 (예: 3자리)
+        RoomUpdateRequest invalidNewPinRequest = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .newPin("123") // 4자리 미만
+                .memberNames(List.of("지용", "태양"))
+                .build();
+
+        // when & then
+        assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), invalidNewPinRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
+    }
+
+    /**
+     * 방 정보 수정 성공 테스트 - 새 PIN 미입력 시 기존 PIN 유지
+     */
+    @Test
+    @DisplayName("새 PIN 번호를 입력하지 않으면 기존 PIN 번호를 유지하고 수정 성공")
+    void updateRoomSuccessKeepOriginalPinTest() {
+        // given
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("원래 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // newPin을 입력하지 않은 수정 요청
+        RoomUpdateRequest updateRequestWithoutNewPin = RoomUpdateRequest.builder()
+                .title("수정된 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .newPin(null) // 새 PIN 전달 안 함
+                .memberNames(List.of("지용", "태양"))
+                .build();
+
+        // when
+        RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), updateRequestWithoutNewPin);
+
+        // then: 수정은 성공하고 기존 PIN으로 입장 조회되는지 확인
+        assertThat(response).isNotNull();
+        assertThat(response.getTitle()).isEqualTo("수정된 방제목");
+
+        // 기존 PIN으로 입장 성공하는지 최종 검증
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder().pin("1234").build();
+        RoomDetailResponse accessResponse = roomService.accessRoom(createResponse.getSlug(), accessRequest);
+        assertThat(accessResponse).isNotNull();
     }
 }
