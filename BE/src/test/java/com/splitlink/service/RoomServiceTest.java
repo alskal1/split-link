@@ -355,6 +355,9 @@ public class RoomServiceTest {
         // 3. 삭제 수행 및 검증
         assertThatCode(() -> roomService.deleteRoom(slug, accessRequest))
                 .doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> roomService.getRoomSummary(slug))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     /**
@@ -400,7 +403,7 @@ public class RoomServiceTest {
         // 3. 삭제 수행 및 검증
         assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("기존 입장코드가 일치하지 않습니다.");
+                .hasMessage("입장코드가 일치하지 않습니다.");
     }
 
     /**

@@ -80,7 +80,7 @@ public class RoomService {
         RoomSummaryResponse response = roomMapper.findSummaryBySlug(slug);
 
         if (response == null) {
-            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+            throw new IllegalArgumentException("해당 방이 없습니다.");
         }
 
         int count = (response.getMemberNames() != null) ? response.getMemberNames().size() : 0;
@@ -178,7 +178,7 @@ public class RoomService {
      * 방 존재 여부 및 입장코드 검증 공통 메서드
      */
     private void validatePin(String slug, String inputPin) {
-        log.info("RoomService:deleteRoom 진입 - slug: {}, inputPin: {}", slug, inputPin);
+        log.info("RoomService:validatePin 진입 - slug: {}", slug);
 
         String realPin = roomMapper.findPinBySlug(slug);
         if (realPin == null) {
@@ -186,7 +186,7 @@ public class RoomService {
         }
 
         if (!realPin.equals(inputPin)) {
-            throw new IllegalArgumentException("기존 입장코드가 일치하지 않습니다.");
+            throw new IllegalArgumentException("입장코드가 일치하지 않습니다.");
         }
     }
 
