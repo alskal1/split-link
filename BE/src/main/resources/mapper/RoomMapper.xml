@@ -84,6 +84,13 @@
         WHERE r.slug = #{slug}
     </select>
 
+    <!-- slug 기준 방 정산 완료 여부 조회 -->
+    <select id="findIsClosedBySlug" resultType="java.lang.Boolean">
+        SELECT is_closed
+        FROM rooms
+        WHERE slug = #{slug}
+    </select>
+
     <!-- ================================================================= -->
     <!-- U: UPDATE (수정)                                                   -->
     <!-- ================================================================= -->
@@ -97,4 +104,19 @@
             pin = #{targetPin}
         WHERE slug = #{slug}
     </update>
+
+    <update id="updateIsClosedBySlug">
+        UPDATE rooms
+        SET is_closed = #{isClosed}
+        WHERE slug = #{slug}
+    </update>
+    <!-- ================================================================= -->
+    <!-- D: DELETE (삭제)                                                   -->
+    <!-- ================================================================= -->
+
+    <!-- slug 기준 방 삭제 -->
+    <delete id="deleteRoom">
+        DELETE FROM rooms
+        WHERE slug = #{slug}
+    </delete>
 </mapper>

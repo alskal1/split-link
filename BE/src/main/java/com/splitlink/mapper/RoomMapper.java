@@ -1,7 +1,5 @@
 package com.splitlink.mapper;
 
-import com.splitlink.dto.request.RoomCreateRequest;
-import com.splitlink.dto.request.RoomUpdateRequest;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Room;
@@ -34,4 +32,13 @@ public interface RoomMapper {
                    @Param("title") String title,
                    @Param("baseCurrency") String baseCurrency,
                    @Param("targetPin") String targetPin);
+
+    /** slug 기준 정산 상태 변경 (테스트 및 정산 완료 처리용) */
+    int updateIsClosedBySlug(@Param("slug") String slug, @Param("isClosed") Boolean isClosed);
+
+    /** slug 기준 방 정산 완료 여부 조회 */
+    Boolean findIsClosedBySlug(String slug);
+
+    /** slug 기준 방 삭제 */
+    int deleteRoom(String slug);
 }
