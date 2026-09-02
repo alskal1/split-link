@@ -4,17 +4,22 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.MemberMapper">
 
-    <!-- 방에 속한 초기 멤버 목록 일괄 저장 -->
     <insert id="insertMembers">
         INSERT INTO members (
-        room_id, name
+            room_id,
+            name
         ) VALUES
         <foreach collection="memberNames" item="name" separator=",">
             (#{roomId}, #{name})
         </foreach>
     </insert>
 
-    <!-- 멤버 전체 삭제 -->
+    <update id="updateIsActive">
+        UPDATE members
+        SET is_active = true
+        WHERE member_id = #{memberId}
+    </update>
+
     <delete id="deleteMembersByRoomId">
         DELETE FROM members
         WHERE room_id = #{roomId}
