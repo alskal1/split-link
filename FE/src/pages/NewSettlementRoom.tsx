@@ -157,16 +157,16 @@ export default function NewSettlementRoom() {
             {members.map((member) => (
               <div
                 key={member}
-                className="flex items-center space-x-1 bg-[#F5F1EC] rounded-[10px] px-3 py-1"
+                className="flex items-center gap-2 rounded-full pl-3 pr-1.5 py-1.5 badge-brand"
               >
                 <span className="font-semibold">{member}</span>
                 <button
                   type="button"
-                  className="w-4 h-4 flex items-center justify-center cursor-pointer"
+                  className="w-5 h-5 flex items-center justify-center rounded-full bg-[#C53829] cursor-pointer shrink-0"
                   onClick={() => handlekRemoveMember(member)}
                   aria-label={`${member} 삭제`}
                 >
-                  <img src={xIcon} alt="삭제" className="w-3 h-3" />
+                  <img src={xIcon} alt="삭제" className="w-2.5 h-2.5" />
                 </button>
               </div>
             ))}
