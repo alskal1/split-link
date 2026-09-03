@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.splitlink.dto.request.RoomCreateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
@@ -28,6 +29,9 @@ public class MemberServiceTest {
 
     @Autowired
     private RoomMapper roomMapper;
+
+    @Autowired
+    private ObjectMapper objectMapper; // Spring Boot 기본 제공 Object-JSON 변환기
 
     @Test
     @DisplayName("멤버 선택 성공 - is_active가 true로 변경되고, JWT 토큰이 발급된다.")
@@ -89,5 +93,30 @@ public class MemberServiceTest {
         assertThatThrownBy(() -> memberService.selectMember(slug, wrongMemberId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("해당 방에 속하지 않은 멤버입니다.");
+    }
+
+    @Test
+    @DisplayName("멤버 선택 응답 JSON 출력 테스트")
+    void printSelectMemberResponseJson() throws Exception {
+        // given (방 생성 및 memberId 조회)
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("JSON 출력 테스트방")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("기영", "기철"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        RoomDetailResponse roomDetail = roomMapper.findDetailBySlug(createResponse.getSlug());
+        Long targetMemberId = roomDetail.getMembers().get(0).getMemberId();
+
+        // when
+        SelectMemberResponse response = memberService.selectMember(createResponse.getSlug(), targetMemberId);
+
+        // then: 콘솔에 JSON 형태로 이쁘게 출력
+        String jsonOutput = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+        System.out.println("========== [ SelectMemberResponse JSON ] ==========");
+        System.out.println(jsonOutput);
+        System.out.println("==================================================");
     }
 }
