@@ -1,0 +1,25 @@
+@use "sass:color";
+@use "variables" as *;
+
+// 설명 텍스트
+.explain-text {
+  font-size: 10pt;
+  color: #281c18;
+}
+
+// 브랜드 CTA 버튼 (색상만 지정, 크기·라운드는 사용처에서 지정)
+.btn-brand {
+  color: $color-white;
+  background-color: $color-brand;
+  cursor: pointer;
+
+  &:active {
+    background-color: color.adjust($color-brand, $lightness: -8%);
+  }
+}
+
+// 강조 배지 (예: 입장코드, 아바타 아이콘)
+.badge-brand {
+  color: $color-brand-dark;
+  background-color: $color-brand-light;
+}
