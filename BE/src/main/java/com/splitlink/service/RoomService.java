@@ -44,7 +44,6 @@ public class RoomService {
         String slug = UUID.randomUUID().toString();
 
         // 2. Room 엔티티 조립 및 DB 저장
-        // 기준 통화 코드를 대문자로 변환
         String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
 
         Room room = Room.builder()

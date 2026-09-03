@@ -45,5 +45,8 @@ public class RoomDetailResponse {
 
         /** 멤버 이름 */
         private String name;
+
+        /** 방 최초 접속 여부 */
+        private boolean isActive;
     }
 }

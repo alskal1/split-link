@@ -15,30 +15,31 @@ public interface RoomMapper {
     /** 방 기본 정보 저장 */
     void insertRoom(Room room);
 
-    /** 슬러그로 roomId 찾기 */
+    /** slug 기준 방 PK 조회 */
     Long findRoomIdBySlug(String slug);
 
     /** slug 기준 방 요약 정보 조회 */
     RoomSummaryResponse findSummaryBySlug(String slug);
 
-    /** slug 기준 방 상세 정보 조회 */
+    /** slug 기준 방 상세 정보 및 멤버 목록 조회 */
     RoomDetailResponse findDetailBySlug(String slug);
 
-    /** slug 기준 정답 입장코드 조회 */
+    /** slug 기준 정답 입장코드(PIN) 조회 */
     String findPinBySlug(String slug);
 
-    /** 방 정보 수정 */
+    /** 방 기본 정보 수정 */
     int updateRoom(@Param("slug") String slug,
                    @Param("title") String title,
                    @Param("baseCurrency") String baseCurrency,
                    @Param("targetPin") String targetPin);
 
-    /** slug 기준 정산 상태 변경 (테스트 및 정산 완료 처리용) */
-    int updateIsClosedBySlug(@Param("slug") String slug, @Param("isClosed") Boolean isClosed);
+    /** slug 기준 방 정산 완료 상태 변경 */
+    int updateIsClosedBySlug(@Param("slug") String slug,
+                             @Param("isClosed") Boolean isClosed);
 
     /** slug 기준 방 정산 완료 여부 조회 */
     Boolean findIsClosedBySlug(String slug);
 
-    /** slug 기준 방 삭제 */
+    /** slug 기준 방 및 관련 데이터 삭제 */
     int deleteRoom(String slug);
 }
