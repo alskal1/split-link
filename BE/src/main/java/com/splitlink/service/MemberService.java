@@ -30,24 +30,21 @@ public class MemberService {
     public SelectMemberResponse selectMember(String slug, Long memberId) {
         log.info("MemberService:selectMember 진입 - slug: {}, memberId: {}", slug, memberId);
 
-        // 방 정보 및 속한 멤버 목록 조회
+        // 1. 방 및 멤버 소속 검증
         RoomDetailResponse roomDetail = roomMapper.findDetailBySlug(slug);
         if (roomDetail == null) {
-            throw new IllegalArgumentException("해당 방이 존재하지 않습니다.");
+            throw new IllegalArgumentException("해당 방이 없습니다.");
         }
 
-        // 해당 방에 속한 멤버인지 검증 및 객체 추출
         RoomDetailResponse.MemberResponse targetMember = roomDetail.getMembers().stream()
                 .filter(m -> m.getMemberId().equals(memberId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다."));
 
-        // 멤버 접속 상태 활성화
-        int updatedRows = memberMapper.updateIsActive(memberId);
-        if (updatedRows == 0) {
-            throw new IllegalArgumentException("멤버 상태 변경에 실패했습니다. (존재하지 않는 멤버)");
-        }
+        // 2. 상태 변경 실행 (앞에서 검증했으므로 검사 생략)
+        memberMapper.updateIsActive(memberId);
 
+        // 3. 토큰 발급 및 리턴
         String accessToken = jwtProvider.createToken(roomDetail.getRoomId(), memberId);
 
         return new SelectMemberResponse(
