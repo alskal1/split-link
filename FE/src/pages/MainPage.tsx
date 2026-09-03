@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import MainCard from "../components/MainCard";
 import mockup from "../assets/hero-mockup.png";
@@ -6,9 +7,20 @@ import mockup from "../assets/hero-mockup.png";
 export default function MainPage() {
   const featureRef = useRef<HTMLDivElement>(null);
   const usageRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
+  /**
+   * 메뉴바에서 메뉴 클릭 시 스크롤 이동
+   */
   const scrollTo = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  /**
+   * 지금 시작하기 버튼 클릭 이벤트
+   */
+  const onClickStartBtn = () => {
+    navigate("/new-settlement-room");
   };
 
   return (
@@ -24,6 +36,7 @@ export default function MainPage() {
             textColor="#fff"
             bgColor="#E85A48"
             className="rounded-3xl"
+            onClick={onClickStartBtn}
           />
         </div>
       </div>
@@ -51,6 +64,7 @@ export default function MainPage() {
               bgColor="#000"
               textColor="#fff"
               className="w-fit rounded-2xl mt-5"
+              onClick={onClickStartBtn}
             />
           </div>
           <div className="w-1/2">
@@ -164,6 +178,7 @@ export default function MainPage() {
             textColor="#fff"
             bgColor="#E85A48"
             className="rounded-2xl h-12.5"
+            onClick={onClickStartBtn}
           />
         </div>
       </div>
