@@ -1,6 +1,7 @@
 package com.splitlink.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
 import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
@@ -118,5 +119,31 @@ public class MemberServiceTest {
         System.out.println("========== [ SelectMemberResponse JSON ] ==========");
         System.out.println(jsonOutput);
         System.out.println("==================================================");
+    }
+
+    @Test
+    @DisplayName("이미 활성화(isActive=true)된 멤버 선택 시 예외 발생 테스트")
+    void selectMemberFailAlreadyActiveTest() {
+        // given: 방 생성 및 멤버 생성
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("중복 선택 테스트방")
+                .baseCurrency("KRW")
+                .pin("Pass123")
+                .memberNames(List.of("참여자A", "참여자B"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+
+        // 방 상세 조회를 통해 생선된 멤버의 memberId 추출
+        RoomAccessRequest accessRequest = RoomAccessRequest.builder().pin("Pass123").build();
+        RoomDetailResponse detailResponse = roomService.accessRoom(createResponse.getSlug(), accessRequest);
+        Long targetMemberId = detailResponse.getMembers().get(0).getMemberId();
+
+        // 1차 선택: 정상적으로 멤버 선택 및 활성화 (isActive -> true)
+        memberService.selectMember(createResponse.getSlug(), targetMemberId);
+
+        // when & then: 이미 active 상태인 멤버를 2차 선택 시 IllegalArgumentException 예외 발생 검증
+        assertThatThrownBy(() -> memberService.selectMember(createResponse.getSlug(), targetMemberId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이미 선택되어 접속 중인 멤버입니다.");
     }
 }

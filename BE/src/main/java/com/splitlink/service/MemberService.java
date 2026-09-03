@@ -41,6 +41,10 @@ public class MemberService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다."));
 
+        if (targetMember.isActive()) {
+            throw new IllegalArgumentException("이미 선택되어 접속 중인 멤버입니다.");
+        }
+
         // 2. 상태 변경 실행 (앞에서 검증했으므로 검사 생략)
         memberMapper.updateIsActive(memberId);
 
