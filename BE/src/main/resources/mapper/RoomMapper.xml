@@ -68,6 +68,7 @@
         <collection property="members" ofType="com.splitlink.dto.response.RoomDetailResponse$MemberResponse">
             <id property="memberId" column="member_id"/>
             <result property="name" column="name"/>
+            <result property="isActive" column="is_active"/>
         </collection>
     </resultMap>
 
@@ -78,7 +79,8 @@
             r.title,
             r.base_currency,
             m.member_id,
-            m.name
+            m.name,
+            m.is_active
         FROM rooms r
         LEFT JOIN members m ON r.room_id = m.room_id
         WHERE r.slug = #{slug}

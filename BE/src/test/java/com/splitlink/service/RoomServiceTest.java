@@ -44,9 +44,7 @@ public class RoomServiceTest {
     /**
      * 방 생성 시나리오 테스트
      *
-     * <p>
-     *     입력값(방 제목, 기준 통화, 입장코드, 멤버 목록)을 바탕으로 방과 멤버가 정상적으로 생성되는지 검증
-     * </p>
+     * 입력값(방 제목, 기준 통화, 입장코드, 멤버 목록)을 바탕으로 방과 멤버가 정상적으로 생성되는지 검증
      */
     @Test
     @DisplayName("방 생성 테스트")
@@ -122,6 +120,11 @@ public class RoomServiceTest {
         assertThat(detailResponse).isNotNull();
         assertThat(detailResponse.getTitle()).isEqualTo("입장 테스트방");
         assertThat(detailResponse.getMembers()).hasSize(2);
+
+        // isActive 필드가 초기값(false)으로 잘 매핑되었는지 검증
+        assertThat(detailResponse.getMembers())
+                .extracting("active") // boolean 필드는 getter명(isActive)에 따라 "active"로 추출
+                .containsExactly(false, false);
     }
 
     /**
