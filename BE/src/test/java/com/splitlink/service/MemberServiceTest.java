@@ -70,7 +70,7 @@ public class MemberServiceTest {
         // when & then
         assertThatThrownBy(() -> memberService.selectMember(invalidSlug, memberId))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("해당 방이 존재하지 않습니다.");
+                .hasMessage("해당 방이 없습니다.");
     }
 
     @Test
