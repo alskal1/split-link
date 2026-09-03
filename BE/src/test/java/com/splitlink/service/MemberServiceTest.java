@@ -97,31 +97,6 @@ public class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("멤버 선택 응답 JSON 출력 테스트")
-    void printSelectMemberResponseJson() throws Exception {
-        // given (방 생성 및 memberId 조회)
-        RoomCreateRequest createRequest = RoomCreateRequest.builder()
-                .title("JSON 출력 테스트방")
-                .baseCurrency("KRW")
-                .pin("1234")
-                .memberNames(List.of("기영", "기철"))
-                .build();
-        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
-
-        RoomDetailResponse roomDetail = roomMapper.findDetailBySlug(createResponse.getSlug());
-        Long targetMemberId = roomDetail.getMembers().get(0).getMemberId();
-
-        // when
-        SelectMemberResponse response = memberService.selectMember(createResponse.getSlug(), targetMemberId);
-
-        // then: 콘솔에 JSON 형태로 이쁘게 출력
-        String jsonOutput = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
-        System.out.println("========== [ SelectMemberResponse JSON ] ==========");
-        System.out.println(jsonOutput);
-        System.out.println("==================================================");
-    }
-
-    @Test
     @DisplayName("이미 활성화(isActive=true)된 멤버 선택 시 예외 발생 테스트")
     void selectMemberFailAlreadyActiveTest() {
         // given: 방 생성 및 멤버 생성
