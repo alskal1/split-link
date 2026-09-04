@@ -50,6 +50,9 @@ export const loadCreatedRoom = (): CreatedRoomStorage | null => {
     const parsed = JSON.parse(raw) as Partial<CreatedRoomStorage>;
 
     if (
+      Array.isArray(parsed.memberNames) ||
+      typeof parsed.title === "string" ||
+      typeof parsed.baseCurrency === "string" ||
       typeof parsed.slug !== "string" ||
       typeof parsed.pin !== "string" ||
       typeof parsed.expiresAt !== "number" ||
