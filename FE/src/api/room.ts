@@ -4,7 +4,6 @@ import type {
   RoomCreateRequest,
   RoomCreateResponse,
 } from "../types/roomType";
-import toast from "react-hot-toast";
 
 /**
  * 정산방 생성
@@ -22,8 +21,6 @@ export const createSettlementRoom = async (
 
     return data.data;
   } catch (error) {
-    toast.error("방 생성에 실패했어요");
-    console.error(error);
-    return undefined;
+    throw new Error("방 생성에 실패했어요");
   }
 };
