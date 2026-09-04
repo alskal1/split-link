@@ -1,15 +1,15 @@
 import { useState } from "react";
-import type { ChangeEvent, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import Button from "../components/Button";
-import Input from "../components/Input";
-import Select from "../components/Select";
-import toast from "react-hot-toast";
-import arrowLeft from "../assets/arrow-left.svg";
-import xIcon from "../assets/x.svg";
 import { CURRENCY_OPTIONS } from "../constants/currency";
 import { createSettlementRoom } from "../api/room";
 import { saveCreatedRoomStorage } from "../utils/createdRoomStorage";
+import type { ChangeEvent, KeyboardEvent } from "react";
+import toast from "react-hot-toast";
+import Button from "../components/Button";
+import Input from "../components/Input";
+import Select from "../components/Select";
+import arrowLeft from "../assets/arrow-left.svg";
+import xIcon from "../assets/x.svg";
 
 export default function NewSettlementRoom() {
   const navigate = useNavigate();
@@ -25,6 +25,8 @@ export default function NewSettlementRoom() {
   const [members, setMembers] = useState<string[]>([]);
   // 입장코드
   const [entryCode, setEntryCode] = useState("");
+  // 생성 진행 여부
+  const [isSubmiting, setIsSubmiting] = useState(false);
 
   // 유효성 체크
   const isValid =
@@ -92,32 +94,46 @@ export default function NewSettlementRoom() {
    * 정산방 생성
    */
   const handleCreateSettlementRoom = async () => {
-    if (!isValid) {
+    // 유효성에 맞지 않거나 생성 진행중인 경우 리턴
+    if (!isValid || isSubmiting) {
       return;
     }
 
-    // 정산방 생성 API 요청
-    const data = await createSettlementRoom({
-      title: roomName.trim(),
-      baseCurrency:
-        baseCurrency === "ETC" ? etcCurrencyCode.trim() : baseCurrency,
-      pin: entryCode,
-      memberNames: members,
-    });
+    setIsSubmiting(true);
 
-    if (!data) {
-      return;
+    try {
+      // 정산방 생성 API 요청
+      const data = await createSettlementRoom({
+        title: roomName.trim(),
+        baseCurrency:
+          baseCurrency === "ETC" ? etcCurrencyCode.trim() : baseCurrency,
+        pin: entryCode,
+        memberNames: members,
+      });
+
+      if (!data) {
+        return;
+      }
+
+      // 세션스토리지 저장
+      saveCreatedRoomStorage(data);
+      navigate("/settlement-room-created", { replace: true });
+    } catch (error) {
+      toast.error("방 생성에 실패했어요");
+    } finally {
+      setIsSubmiting(false);
     }
-
-    // 세션스토리지 저장
-    saveCreatedRoomStorage(data);
-    navigate("/settlement-room-created", { replace: true });
   };
 
   return (
     <div className="flex flex-col space-y-8">
       <div className="flex items-center space-x-2">
-        <div className="w-7 h-7 flex justify-center items-center bg-white rounded-4xl">
+        <div
+          className="w-7 h-7 flex justify-center items-center bg-white rounded-4xl cursor-pointer"
+          onClick={() => {
+            navigate(-1);
+          }}
+        >
           <img src={arrowLeft} alt="뒤로가기" className="w-4 h-4" />
         </div>
         <div className="font-bold">정산방 만들기</div>
@@ -201,7 +217,7 @@ export default function NewSettlementRoom() {
           onChange={handleEntryCodeChange}
           maxLength={10}
         />
-        {entryCode.length < 4 && entryCode.length != 0 ? (
+        {entryCode.length < 4 && entryCode.length !== 0 ? (
           <div className="text-[10pt] text-[#C53829]">
             영대소문자와 숫자만 사용해 4~10자로 입력해주세요.
           </div>
@@ -212,11 +228,11 @@ export default function NewSettlementRoom() {
         )}
       </div>
       <Button
-        title="정산방 만들기"
+        title={`${isSubmiting ? "생성 중..." : "정산방 만들기"}`}
         bgColor="#000"
         textColor="#fff"
         className="rounded-[10px]"
-        disabled={!isValid}
+        disabled={!isValid || isSubmiting}
         onClick={handleCreateSettlementRoom}
       />
     </div>
