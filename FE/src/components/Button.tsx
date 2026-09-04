@@ -19,8 +19,8 @@ interface ButtonProps {
  */
 export default function Button({
   title,
-  textColor,
-  bgColor,
+  textColor = "#000",
+  bgColor = "fff",
   className = "",
   onClick,
   disabled = false,
