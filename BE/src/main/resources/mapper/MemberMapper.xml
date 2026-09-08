@@ -4,6 +4,16 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.MemberMapper">
 
+    <!-- 멤버 ID 기준 계좌 정보 조회 (은행명, 계좌번호) -->
+    <select id="findAccountInfoByMemberId" resultType="com.splitlink.dto.response.ExpenseFormInitResponse$AccountInfo">
+        SELECT
+        bank_name,
+        account_number
+        FROM members
+        WHERE member_id = #{memberId}
+    </select>
+
+    <!-- 방 생성 시 초기 멤버 목록 일괄 저장 -->
     <insert id="insertMembers">
         INSERT INTO members (
             room_id,
@@ -14,12 +24,14 @@
         </foreach>
     </insert>
 
+    <!-- 멤버 접속 선택 시 활성화 상태 변경 -->
     <update id="updateIsActive">
         UPDATE members
         SET is_active = true
         WHERE member_id = #{memberId}
     </update>
 
+    <!-- 특정 방의 전체 멤버 일괄 삭제 -->
     <delete id="deleteMembersByRoomId">
         DELETE FROM members
         WHERE room_id = #{roomId}

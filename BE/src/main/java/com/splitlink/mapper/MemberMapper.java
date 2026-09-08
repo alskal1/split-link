@@ -1,9 +1,11 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.response.ExpenseFormInitResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 멤버 데이터 영속성 처리를 담당하는 MyBatis Mapper 인터페이스
@@ -20,4 +22,7 @@ public interface MemberMapper {
 
     /** 멤버 접속 선택 시 활성화 상태(is_active = true) 변경 */
     int updateIsActive(Long memberId);
+
+    /** 멤버의 계좌 정보(은행명, 계좌번호) 조회 */
+    Optional<ExpenseFormInitResponse.AccountInfo> findAccountInfoByMemberId(Long memberId);
 }

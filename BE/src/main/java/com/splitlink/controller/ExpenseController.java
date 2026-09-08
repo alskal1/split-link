@@ -2,6 +2,8 @@ package com.splitlink.controller;
 
 import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
+import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.service.ExpenseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -16,16 +18,19 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ExpenseController {
 
+    private final ExpenseService expenseService;
+
     /**
-     * 지출 입력 폼 초기화 정보 조회
+     * 지출 입력 폼 초기 데이터 조회 (계좌 정보 및 방 멤버 목록)
      */
     @GetMapping("/new")
-    public ResponseEntity<ApiResponse<String>> getExpenseFormInit(
+    public ResponseEntity<ApiResponse<ExpenseFormInitResponse>> getExpenseFormInit(
             @PathVariable String slug,
             @AuthMember Long memberId) {
         log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
-        // 아직 서비스 구현 전이므로 임시 성공 응답 반환
-        return ResponseEntity.ok(ApiResponse.success("memberId 추출 성공: " + memberId));
+        ExpenseFormInitResponse response = expenseService.getExpenseFormInit(slug, memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
