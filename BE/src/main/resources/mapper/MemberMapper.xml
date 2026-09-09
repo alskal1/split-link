@@ -4,6 +4,7 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.MemberMapper">
 
+    <!-- TODO: [DB] 계좌번호 암호화 적용 시 account_number 컬럼 길이 확장 필요 (VARCHAR(50) -> VARCHAR(255)) -->
     <!-- 멤버 ID 기준 계좌 정보 조회 (은행명, 계좌번호) -->
     <select id="findAccountInfoByMemberId" resultType="com.splitlink.dto.response.ExpenseFormInitResponse$AccountInfo">
         SELECT
@@ -36,4 +37,12 @@
         DELETE FROM members
         WHERE room_id = #{roomId}
     </delete>
+
+    <!-- 결제자 계좌 정보 업데이트 -->
+    <update id="updateAccountInfo">
+        UPDATE members
+        SET bank_name = #{bankName},
+            account_number = #{accountNumber}
+        WHERE member_id = #{memberId}
+    </update>
 </mapper>

@@ -25,4 +25,9 @@ public interface MemberMapper {
 
     /** 멤버의 계좌 정보(은행명, 계좌번호) 조회 */
     Optional<ExpenseFormInitResponse.AccountInfo> findAccountInfoByMemberId(Long memberId);
+
+    /** 결제자의 정산 계좌 정보(은행명, 계좌번호) 최신화 */
+    void updateAccountInfo(@Param("memberId") Long memberId,
+                          @Param("bankName") String bankName,
+                          @Param("accountNumber") String accountNumber);
 }

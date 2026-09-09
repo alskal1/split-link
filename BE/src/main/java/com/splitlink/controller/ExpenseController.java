@@ -2,10 +2,13 @@ package com.splitlink.controller;
 
 import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
+import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.service.ExpenseService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,4 +36,21 @@ public class ExpenseController {
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    /**
+     * 지출 내역 일괄 등록
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<Void>> createExpenses(
+            @PathVariable String slug,
+            @AuthMember Long memberId,
+            @Valid @RequestBody ExpenseBatchCreateRequest request) {
+        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
+
+        expenseService.createExpenses(slug, memberId, request);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(201, null));
+    }
+
 }
