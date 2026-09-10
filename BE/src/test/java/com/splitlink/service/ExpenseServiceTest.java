@@ -1,15 +1,20 @@
 package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
+import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +31,9 @@ public class ExpenseServiceTest {
 
     @Mock
     private MemberMapper memberMapper;
+
+    @Mock
+    private ExpenseMapper expenseMapper;
 
     @Mock
     private RoomAccessValidator roomAccessValidator;
@@ -114,5 +122,53 @@ public class ExpenseServiceTest {
         assertThatThrownBy(() -> expenseService.getExpenseFormInit(slug, invalidMemberId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
+    }
+
+    @Test
+    @DisplayName("성공: 1/N 정산 시 소수점 버림 후 남은 1원 오차가 첫 번째 참여자에게 정상 가산된다.")
+    void createExpensesRemainderAddedToFirstMember() {
+        // given
+        String slug = "test-slug";
+        Long currentMemberId = 1L;
+        Long roomId = 10L;
+
+        // 10,000원을 3명이 분할 (3,333원 * 3 = 9,999원 -> 오차 1원 발생)
+        ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                .title("저녁 식사")
+                .amount(new BigDecimal("10000"))
+                .targetMemberIds(List.of(1L, 2L, 3L))
+                .build();
+
+        ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                .payerId(1L)
+                .spentAt(LocalDateTime.now())
+                .currency("KRW")
+                .bankName("카카오뱅크")
+                .accountNumber("3333-12-345678")
+                .items(List.of(item))
+                .build();
+
+        ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                .expenseGroups(List.of(group))
+                .build();
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+
+        // when
+        expenseService.createExpenses(slug, currentMemberId, request);
+
+        // then
+        // insertExpenseShares 메서드로 넘어간 파라미터 캡처
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExpenseMapper.ExpenseShareParam>> captor = ArgumentCaptor.forClass(List.class);
+        verify(expenseMapper).insertExpenseShares(captor.capture());
+
+        List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
+
+        // 3명에게 분할된 금액 검증
+        assertThat(shares).hasSize(3);
+        assertThat(shares.get(0).getAmount()).isEqualTo(new BigDecimal("3334")); // 오차 1원 추가됨 (3,333 + 1)
+        assertThat(shares.get(1).getAmount()).isEqualTo(new BigDecimal("3333"));
+        assertThat(shares.get(2).getAmount()).isEqualTo(new BigDecimal("3333"));
     }
 }

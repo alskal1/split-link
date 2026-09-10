@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -87,7 +88,6 @@ public class ExpenseService {
             // 결제자 그룹 내 세부 지출 항목 등록
             for (ExpenseBatchCreateRequest.ExpenseItemRequest item : group.getItems()) {
 
-                // Expense 메인 엔티티 생성
                 Expense expense = Expense.builder()
                         .roomId(roomId)
                         .payerId(group.getPayerId())
@@ -100,17 +100,44 @@ public class ExpenseService {
 
                 // 메인 지출 데이터 저장 (MyBatis useGeneratedKeys를 통해 expenseId PK 주입됨)
                 expenseMapper.insertExpense(expense);
-                Long expenseId = expense.getExpenseId();
 
-                // 1/N 지출 부담 금액 계산 (소수점 첫째자리 반올림)
-                int memberCount = item.getTargetMemberIds().size();
-                BigDecimal amountPerMember = item.getAmount().divide(
-                        new BigDecimal(memberCount), 0, RoundingMode.HALF_UP
+                // 오차 보정된 멤버별 부담금 리스트 계산 (별도 메서드 호출)
+                List<ExpenseMapper.ExpenseShareParam> shares = calculateShares(
+                        expense.getExpenseId(),
+                        item.getAmount(),
+                        item.getTargetMemberIds()
                 );
 
                 // 지출 부담 참여자 Bulk Insert
-                expenseMapper.insertExpenseMembers(expenseId, item.getTargetMemberIds(), amountPerMember);
+                expenseMapper.insertExpenseShares(shares);
             }
         }
+    }
+
+    /**
+     * 1/N 부담금 계산 및 1원 오차 보정 헬퍼 메서드
+     * (소수점 버림 후 남은 차액은 첫 번째 참여자에게 가산)
+     */
+    private List<ExpenseMapper.ExpenseShareParam> calculateShares(Long expenseId, BigDecimal totalAmount, List<Long> memberIds) {
+        int memberCount = memberIds.size();
+
+        // 소수점 아래 버림 처리 (예: 10,000 / 3 = 3,333)
+        BigDecimal baseAmount = totalAmount.divide(new BigDecimal(memberCount), 0, RoundingMode.DOWN);
+
+        // 남은 오차 금액 계산 (예: 10,000 - (3,333 * 3) = 1)
+        BigDecimal remainder = totalAmount.subtract(baseAmount.multiply(new BigDecimal(memberCount)));
+
+        List<ExpenseMapper.ExpenseShareParam> shares = new ArrayList<>();
+
+        for (int i = 0; i < memberCount; i++) {
+            Long memberId = memberIds.get(i);
+
+            // 첫 번째 사람(i == 0)에게 남은 오차(1원 등)를 몰아줌
+            BigDecimal finalAmount = (i == 0) ? baseAmount.add(remainder) : baseAmount;
+
+            shares.add(new ExpenseMapper.ExpenseShareParam(expenseId, memberId, finalAmount));
+        }
+
+        return shares;
     }
 }

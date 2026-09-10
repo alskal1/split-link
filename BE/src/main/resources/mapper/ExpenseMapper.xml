@@ -30,17 +30,17 @@
     </insert>
 
     <!-- 지출 분할 참여자 Bulk INSERT -->
-    <insert id="insertExpenseMembers">
+    <insert id="insertExpenseShares">
         INSERT INTO expense_shares (
             expense_id,
             member_id,
             amount
         ) VALUES
-        <foreach collection="memberIds" item="memberId" separator=",">
+        <foreach collection="shares" item="share" separator=",">
             (
-                #{expenseId},
-                #{memberId},
-                #{amount}
+                #{share.expenseId},
+                #{share.memberId},
+                #{share.amount}
             )
         </foreach>
     </insert>

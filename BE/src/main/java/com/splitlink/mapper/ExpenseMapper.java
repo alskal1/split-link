@@ -1,6 +1,8 @@
 package com.splitlink.mapper;
 
 import com.splitlink.entity.Expense;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -16,8 +18,17 @@ public interface ExpenseMapper {
     /** 메인 지출 정보 단건 저장 */
     void insertExpense(Expense expense);
 
-    /** 지출 분할 참여자별 부담 금액 목록 일괄 저장 (Bulk Insert) */
-    void insertExpenseMembers(@Param("expenseId") Long expenseId,
-                              @Param("memberIds") List<Long> memberIds,
-                              @Param("amount") BigDecimal amount);
+    /** 개별 금액이 포함된 부담금 Bulk Insert */
+    void insertExpenseShares(@Param("shares") List<ExpenseShareParam> shares);
+
+    /**
+     * 지출 부담금 Bulk Insert 전용 파라미터 전달 DTO
+     */
+    @Getter
+    @AllArgsConstructor
+    class ExpenseShareParam {
+        private Long expenseId;
+        private Long memberId;
+        private BigDecimal amount;
+    }
 }
