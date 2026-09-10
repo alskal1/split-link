@@ -13,6 +13,12 @@ import java.util.Optional;
 @Mapper
 public interface MemberMapper {
 
+    /**
+     * 특정 방(slug)의 전체 멤버 목록 조회
+     */
+    List<ExpenseFormInitResponse.MemberInfo> findRoomMembersBySlug(@Param("slug") String slug,
+                                                                   @Param("memberId") Long memberId);
+
     /** 방 생성 시 초기 멤버 목록 일괄 저장 */
     void insertMembers(@Param("roomId") Long roomId,
                        @Param("memberNames") List<String> memberNames);
@@ -30,4 +36,6 @@ public interface MemberMapper {
     void updateAccountInfo(@Param("memberId") Long memberId,
                           @Param("bankName") String bankName,
                           @Param("accountNumber") String accountNumber);
+
+
 }
