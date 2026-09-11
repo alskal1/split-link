@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { clearCreatedRoom, loadCreatedRoom } from "../utils/createdRoomStorage";
+import type { roomStorage } from "../types/roomType";
 import toast from "react-hot-toast";
 import Button from "../components/Button";
 import checkIcon from "../assets/check.svg";
-import { clearCreatedRoom, loadCreatedRoom } from "../utils/createdRoomStorage";
-import type { CreatedRoomStorage } from "../types/roomType";
 
 export default function SettlementRoomCreated() {
   const navigate = useNavigate();
-  const [room, setRoom] = useState<CreatedRoomStorage | null>(null);
+  const [room, setRoom] = useState<roomStorage | null>(null);
 
   useEffect(() => {
     const stored = loadCreatedRoom();
 
-    // 세션스토리지에 정보 없을 경우 화면 표시 안함
+    // 세션스토리지에 정보 없을 경우 메인 페이지로 이동
     if (!stored) {
       navigate("/", { replace: true });
       return;
@@ -40,10 +40,14 @@ export default function SettlementRoomCreated() {
   };
 
   // 정산방 이동
-  const handleEnterRoom = () => {
+  const handleEnterRoom = async () => {
     // 세션스토리지 정보 제거
     clearCreatedRoom();
-    navigate(`/rooms/${room.slug}`, { replace: true });
+    // 방장은 입장코드를 이미 알고 있으므로 입장코드 입력은 건너뛰고 본인 멤버 선택 단계로 바로 이동
+    navigate(`/rooms/${room.slug}`, {
+      replace: true,
+      state: { pin: room.pin },
+    });
   };
 
   return (
@@ -90,7 +94,9 @@ export default function SettlementRoomCreated() {
 
       <Button
         title="정산방으로 이동"
-        className="w-full rounded-2xl h-12.5 btn-brand"
+        className="w-full rounded-2xl h-12.5"
+        bgColor="#e85a48"
+        textColor="#fff"
         onClick={handleEnterRoom}
       />
     </div>
