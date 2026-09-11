@@ -178,7 +178,7 @@ export default function NewSettlementRoom() {
                 <span className="font-semibold">{member}</span>
                 <button
                   type="button"
-                  className="w-5 h-5 flex items-center justify-center rounded-full bg-[#C53829] cursor-pointer shrink-0"
+                  className="w-5 h-5 flex items-center justify-center rounded-full bg-[#c53829] cursor-pointer shrink-0"
                   onClick={() => handlekRemoveMember(member)}
                   aria-label={`${member} 삭제`}
                 >
@@ -218,7 +218,7 @@ export default function NewSettlementRoom() {
           maxLength={10}
         />
         {entryCode.length < 4 && entryCode.length !== 0 ? (
-          <div className="text-[10pt] text-[#C53829]">
+          <div className="text-[10pt] text-[#c53829]">
             영대소문자와 숫자만 사용해 4~10자로 입력해주세요.
           </div>
         ) : (

@@ -35,7 +35,7 @@ export default function Select({
 }: SelectProps) {
   return (
     <select
-      className={`${className} appearance-none border border-[#E6DFD9] rounded-[10px] p-2`}
+      className={`${className} appearance-none border border-[#e6dfd9] rounded-[10px] p-2`}
       style={{ width: width, height: height, backgroundColor: bgColor }}
       defaultValue={option}
       onChange={(e) => onChange?.(e.target.value)}

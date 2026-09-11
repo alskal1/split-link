@@ -38,7 +38,7 @@ export default function Input({
 }: inputProps) {
   return (
     <input
-      className={`${className} border border-[#E6DFD9] rounded-[10px] p-2`}
+      className={`${className} border border-[#e6dfd9] rounded-[10px] p-2`}
       placeholder={placeholder}
       value={value}
       onChange={onChange}
