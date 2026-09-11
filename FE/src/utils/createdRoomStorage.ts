@@ -2,14 +2,14 @@ import {
   CREATED_ROOM_STORAGE_KEY,
   CREATED_ROOM_TTL_MS,
 } from "../constants/room";
-import type { CreatedRoomStorage, RoomCreateResponse } from "../types/roomType";
+import type { roomStorage, RoomCreateResponse } from "../types/roomType";
 
 /**
  * 정산방 생성 완료 정보를 세션에 저장
  * @param data 정산방 생성 응답
  */
 export const saveCreatedRoomStorage = (data: RoomCreateResponse): void => {
-  const payload: CreatedRoomStorage = {
+  const payload: roomStorage = {
     slug: data.slug,
     title: data.title,
     baseCurrency: data.baseCurrency,
@@ -29,7 +29,7 @@ export const saveCreatedRoomStorage = (data: RoomCreateResponse): void => {
  * 저장된 정산방 생성 완료 정보
  * @returns 유효한 저장 데이터 또는 null
  */
-export const loadCreatedRoom = (): CreatedRoomStorage | null => {
+export const loadCreatedRoom = (): roomStorage | null => {
   // sessionStorage에서 읽어온 원본 문자열을 담을 변수
   let raw: string | null = null;
   try {
@@ -47,12 +47,12 @@ export const loadCreatedRoom = (): CreatedRoomStorage | null => {
 
   try {
     // 문자열을 객체로 파싱
-    const parsed = JSON.parse(raw) as Partial<CreatedRoomStorage>;
+    const parsed = JSON.parse(raw) as Partial<roomStorage>;
 
     if (
-      Array.isArray(parsed.memberNames) ||
-      typeof parsed.title === "string" ||
-      typeof parsed.baseCurrency === "string" ||
+      !Array.isArray(parsed.memberNames) ||
+      typeof parsed.title !== "string" ||
+      typeof parsed.baseCurrency !== "string" ||
       typeof parsed.slug !== "string" ||
       typeof parsed.pin !== "string" ||
       typeof parsed.expiresAt !== "number" ||
@@ -63,8 +63,8 @@ export const loadCreatedRoom = (): CreatedRoomStorage | null => {
       return null;
     }
 
-    // 검증을 통과한 데이터를 CreatedRoomStorage로 반환
-    return parsed as CreatedRoomStorage;
+    // 검증을 통과한 데이터를 roomStorage로 반환
+    return parsed as roomStorage;
   } catch (error) {
     console.error(error);
     clearCreatedRoom();
