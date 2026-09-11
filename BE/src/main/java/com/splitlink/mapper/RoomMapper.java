@@ -18,6 +18,10 @@ public interface RoomMapper {
     /** slug 기준 방 PK 조회 */
     Long findRoomIdBySlug(String slug);
 
+    /** slug, memberId 기준 방 PK 조회 */
+    Long findRoomIdBySlugAndMemberId(@Param("slug") String slug,
+                                     @Param("memberId") Long memberId);
+
     /** slug 기준 방 요약 정보 조회 */
     RoomSummaryResponse findSummaryBySlug(String slug);
 

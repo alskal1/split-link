@@ -262,7 +262,7 @@ public class RoomServiceTest {
         // when & then
         assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), wrongPinRequest))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("기존 입장코드가 일치하지 않습니다.");
+                .hasMessage("입장코드가 일치하지 않습니다.");
     }
 
     /**
