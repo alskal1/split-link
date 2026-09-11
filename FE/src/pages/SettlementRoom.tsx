@@ -48,7 +48,6 @@ export default function SettlementRoom() {
   }, [slug, navigate]);
 
   if (!room) {
-    navigate("/", { replace: true });
     return null;
   }
 
