@@ -2,14 +2,14 @@ import {
   CREATED_ROOM_STORAGE_KEY,
   CREATED_ROOM_TTL_MS,
 } from "../constants/room";
-import type { roomStorage, RoomCreateResponse } from "../types/roomType";
+import type { RoomStorage, RoomCreateResponse } from "../types/roomType";
 
 /**
  * 정산방 생성 완료 정보를 세션에 저장
  * @param data 정산방 생성 응답
  */
 export const saveCreatedRoomStorage = (data: RoomCreateResponse): void => {
-  const payload: roomStorage = {
+  const payload: RoomStorage = {
     slug: data.slug,
     title: data.title,
     baseCurrency: data.baseCurrency,
@@ -29,7 +29,7 @@ export const saveCreatedRoomStorage = (data: RoomCreateResponse): void => {
  * 저장된 정산방 생성 완료 정보
  * @returns 유효한 저장 데이터 또는 null
  */
-export const loadCreatedRoom = (): roomStorage | null => {
+export const loadCreatedRoom = (): RoomStorage | null => {
   // sessionStorage에서 읽어온 원본 문자열을 담을 변수
   let raw: string | null = null;
   try {
@@ -47,7 +47,7 @@ export const loadCreatedRoom = (): roomStorage | null => {
 
   try {
     // 문자열을 객체로 파싱
-    const parsed = JSON.parse(raw) as Partial<roomStorage>;
+    const parsed = JSON.parse(raw) as Partial<RoomStorage>;
 
     if (
       !Array.isArray(parsed.memberNames) ||
@@ -63,8 +63,8 @@ export const loadCreatedRoom = (): roomStorage | null => {
       return null;
     }
 
-    // 검증을 통과한 데이터를 roomStorage로 반환
-    return parsed as roomStorage;
+    // 검증을 통과한 데이터를 RoomStorage로 반환
+    return parsed as RoomStorage;
   } catch (error) {
     console.error(error);
     clearCreatedRoom();

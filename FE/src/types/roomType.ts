@@ -48,7 +48,7 @@ export interface RoomCreateResponse {
  * sessionStorage에 저장되어 탭을 닫으면 사라지며, expiresAt으로 노출 시간을 추가로 제한한다.
  * @param expiresAt 만료 시각(epoch ms)
  */
-export interface roomStorage extends RoomCreateResponse {
+export interface RoomStorage extends RoomCreateResponse {
   expiresAt: number;
 }
 

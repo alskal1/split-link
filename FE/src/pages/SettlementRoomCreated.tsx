@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearCreatedRoom, loadCreatedRoom } from "../utils/createdRoomStorage";
-import type { roomStorage } from "../types/roomType";
+import type { RoomStorage } from "../types/roomType";
 import toast from "react-hot-toast";
 import Button from "../components/Button";
 import checkIcon from "../assets/check.svg";
 
 export default function SettlementRoomCreated() {
   const navigate = useNavigate();
-  const [room, setRoom] = useState<roomStorage | null>(null);
+  const [room, setRoom] = useState<RoomStorage | null>(null);
 
   useEffect(() => {
     const stored = loadCreatedRoom();
