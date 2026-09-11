@@ -47,10 +47,17 @@ export default function SettlementRoomAccess() {
       return;
     }
 
+    // 응답 도착 전에 slug가 바뀌거나 언마운트되면 이후 상태 갱신을 막기 위한 플래그
+    let cancelled = false;
+
     (async () => {
       try {
         // 방 요약 정보 조회
         const summary = await getRoomSummary(slug);
+
+        if (cancelled) {
+          return;
+        }
 
         // 방 요약 정보 없을 경우 메인 페이지로 이동
         if (!summary) {
@@ -60,17 +67,33 @@ export default function SettlementRoomAccess() {
 
         setTitle(summary.title);
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         toast.error("방 정보를 불러오지 못했어요");
         navigate("/", { replace: true });
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, navigate]);
 
   useEffect(() => {
     // 방장 플로우: 전달받은 입장코드로 자동 인증하여 입장코드 입력 화면을 건너뜀
-    if (autoPin && slug) {
-      verifyPin(autoPin);
+    if (!autoPin || !slug) {
+      return;
     }
+
+    let cancelled = false;
+
+    verifyPin(autoPin, () => cancelled);
+
+    return () => {
+      cancelled = true;
+    };
   }, [autoPin, slug]);
 
   /**
@@ -85,8 +108,12 @@ export default function SettlementRoomAccess() {
   /**
    * 입장코드 검증
    * @param value 검증할 입장코드
+   * @param isCancelled 응답 도착 시점에 이 호출이 여전히 유효한지 확인하는 콜백 (자동 인증 useEffect에서만 사용)
    */
-  const verifyPin = async (value: string) => {
+  const verifyPin = async (
+    value: string,
+    isCancelled: () => boolean = () => false,
+  ) => {
     if (!slug || !value || isSubmiting) {
       return;
     }
@@ -96,7 +123,7 @@ export default function SettlementRoomAccess() {
     try {
       const data = await accessRoom(slug, { pin: value });
 
-      if (!data) {
+      if (isCancelled() || !data) {
         return;
       }
 
@@ -104,10 +131,14 @@ export default function SettlementRoomAccess() {
       setMembers(data.members);
       setStep("select-member");
     } catch (error) {
-      toast.error("입장코드가 올바르지 않아요");
+      if (!isCancelled()) {
+        toast.error("입장코드가 올바르지 않아요");
+      }
     } finally {
-      setIsSubmiting(false);
-      setAutoVerifyDone(true);
+      if (!isCancelled()) {
+        setIsSubmiting(false);
+        setAutoVerifyDone(true);
+      }
     }
   };
 
