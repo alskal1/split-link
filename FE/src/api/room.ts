@@ -1,3 +1,4 @@
+import axios from "axios";
 import api from "./axios";
 import type {
   ApiResponse,
@@ -9,6 +10,24 @@ import type {
   RoomUpdateRequest,
   SelectMemberResponse,
 } from "../types/roomType";
+
+/**
+ * 에러에서 서버가 내려준 메시지를 꺼내고, 없으면 기본 메시지로 대체
+ * @param error catch로 잡힌 에러
+ * @param fallback 서버 메시지가 없을 때 사용할 기본 메시지
+ */
+const extractErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error)) {
+    const message = (error.response?.data as ApiResponse<unknown> | undefined)
+      ?.message;
+
+    if (message) {
+      return message;
+    }
+  }
+
+  return fallback;
+};
 
 /**
  * 정산방 생성
@@ -26,7 +45,7 @@ export const createSettlementRoom = async (
 
     return data.data;
   } catch (error) {
-    throw new Error("방 생성에 실패했어요");
+    throw new Error(extractErrorMessage(error, "방 생성에 실패했어요"));
   }
 };
 
@@ -45,7 +64,7 @@ export const getRoomSummary = async (
 
     return data.data;
   } catch (error) {
-    throw new Error("방 정보를 불러오지 못했어요");
+    throw new Error(extractErrorMessage(error, "방 정보를 불러오지 못했어요"));
   }
 };
 
@@ -67,7 +86,7 @@ export const accessRoom = async (
 
     return data.data;
   } catch (error) {
-    throw new Error("입장코드가 올바르지 않아요");
+    throw new Error(extractErrorMessage(error, "입장코드가 올바르지 않아요"));
   }
 };
 
@@ -88,7 +107,7 @@ export const selectMember = async (
 
     return data.data;
   } catch (error) {
-    throw new Error("멤버 선택에 실패했어요");
+    throw new Error(extractErrorMessage(error, "멤버 선택에 실패했어요"));
   }
 };
 
@@ -110,7 +129,7 @@ export const updateRoom = async (
 
     return data.data;
   } catch (error) {
-    throw new Error("방 수정에 실패했어요");
+    throw new Error(extractErrorMessage(error, "방 수정에 실패했어요"));
   }
 };
 
@@ -128,6 +147,6 @@ export const deleteRoom = async (
       data: request,
     });
   } catch (error) {
-    throw new Error("방 삭제에 실패했어요");
+    throw new Error(extractErrorMessage(error, "방 삭제에 실패했어요"));
   }
 };
