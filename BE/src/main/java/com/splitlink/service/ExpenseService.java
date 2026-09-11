@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 지출 관련 비즈니스 로직을 처리하는 서비스
@@ -71,8 +73,20 @@ public class ExpenseService {
     @Transactional
     public void createExpenses(String slug, Long memberId, ExpenseBatchCreateRequest request) {
 
-        // 방 식별자로 방 PK 가져오기
+        // 요청자 본인의 방 접근 권한 및 roomId 조회
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 요청 데이터 내의 모든 payerId와 targetMemberIds 수집
+        Set<Long> allRequestMemberIds = new HashSet<>();
+        for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {
+            allRequestMemberIds.add(group.getPayerId());
+            for (ExpenseBatchCreateRequest.ExpenseItemRequest item : group.getItems()) {
+                allRequestMemberIds.addAll(item.getTargetMemberIds());
+            }
+        }
+
+        // 요청된 모든 memberId가 실제 해당 방 소속인지 일괄 검증 (IDOR 방지)
+        roomAccessValidator.validateMembersInRoom(roomId, new ArrayList<>(allRequestMemberIds));
 
         // 결제자 그룹 단위 처리
         for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {

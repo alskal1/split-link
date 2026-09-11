@@ -37,5 +37,7 @@ public interface MemberMapper {
                           @Param("bankName") String bankName,
                           @Param("accountNumber") String accountNumber);
 
-
+    /** 지정한 방(roomId)에 해당 멤버들(memberIds)이 모두 속해 있는지 개수 조회 */
+    int countMembersByRoomIdAndMemberIds(@Param("roomId") Long roomId,
+                                         @Param("memberIds") List<Long> memberIds);
 }

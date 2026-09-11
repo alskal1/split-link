@@ -20,7 +20,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -170,5 +173,45 @@ public class ExpenseServiceTest {
         assertThat(shares.get(0).getAmount()).isEqualTo(new BigDecimal("3334")); // 오차 1원 추가됨 (3,333 + 1)
         assertThat(shares.get(1).getAmount()).isEqualTo(new BigDecimal("3333"));
         assertThat(shares.get(2).getAmount()).isEqualTo(new BigDecimal("3333"));
+    }
+
+    @Test
+    @DisplayName("예외: 요청 바디의 payerId 또는 targetMemberIds 중 방 소속이 아닌 멤버가 있으면 예외가 발생한다.")
+    void createExpensesThrowExceptionWhenMemberNotInRoom() {
+        // given
+        String slug = "test-slug";
+        Long currentMemberId = 1L;
+        Long roomId = 10L;
+        Long outsideMemberId = 999L; // 다른 방 멤버 (공격 시도)
+
+        ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                .title("저녁 식사")
+                .amount(new BigDecimal("10000"))
+                .targetMemberIds(List.of(1L, outsideMemberId)) // 방 밖 멤버 포함
+                .build();
+
+        ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                .payerId(1L)
+                .spentAt(LocalDateTime.now())
+                .currency("KRW")
+                .bankName("카카오뱅크")
+                .accountNumber("3333-12-345678")
+                .items(List.of(item))
+                .build();
+
+        ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                .expenseGroups(List.of(group))
+                .build();
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+
+        // RoomAccessValidator에서 검증 실패 예외를 던지도록 모킹
+        doThrow(new IllegalArgumentException("해당 방에 속하지 않은 참여자가 포함되어 있습니다."))
+                .when(roomAccessValidator).validateMembersInRoom(eq(roomId), anyList());
+
+        // when & then
+        assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("해당 방에 속하지 않은 참여자가 포함되어 있습니다.");
     }
 }

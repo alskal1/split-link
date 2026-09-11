@@ -61,4 +61,15 @@
             account_number = #{accountNumber}
         WHERE member_id = #{memberId}
     </update>
+
+    <!-- 지정한 방에 속한 멤버 수 조회 -->
+    <select id="countMembersByRoomIdAndMemberIds" resultType="int">
+        SELECT count(*)
+        FROM members
+        WHERE room_id = #{roomId}
+            AND member_id IN
+            <foreach collection="memberIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+    </select>
 </mapper>
