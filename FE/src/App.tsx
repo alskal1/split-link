@@ -5,6 +5,8 @@ import MobileLayout from "./MobileLayout";
 import MainPage from "./pages/MainPage";
 import NewSettlementRoom from "./pages/NewSettlementRoom";
 import SettlementRoomCreated from "./pages/SettlementRoomCreated";
+import SettlementRoomAccess from "./pages/SettlementRoomAccess";
+import SettlementRoom from "./pages/SettlementRoom";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
             path="/settlement-room-created"
             element={<SettlementRoomCreated />}
           />
+          <Route path="/rooms/:slug" element={<SettlementRoomAccess />} />
+          <Route path="/rooms/:slug/room" element={<SettlementRoom />} />
         </Route>
       </Routes>
       <Toaster />

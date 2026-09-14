@@ -45,7 +45,7 @@ export default function MainCard({
         <img src={ICONS[icon]} alt="아이콘" className="w-5 h-5" />
       </div>
       <div className="text-[1.1rem] font-bold">{title}</div>
-      <div className="text-[10pt] text-[#281C18]">{contents}</div>
+      <div className="text-[10pt] text-[#281c18]">{contents}</div>
       <img src={`${pageImg}`} alt="이미지" />
     </div>
   );
