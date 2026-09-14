@@ -1,5 +1,6 @@
 package com.splitlink.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -59,9 +60,11 @@ public class ExpenseFormInitResponse {
         private String name;
 
         /** 방 진입 완료 여부 (UI '미입장' 표시용) */
+        @Getter(onMethod_ = {@JsonProperty("isActive")})
         private boolean isActive;
 
         /** 현재 로그인한 본인 여부 (UI '나' 표시용) */
+        @Getter(onMethod_ = {@JsonProperty("isSelf")})
         private boolean isSelf;
     }
 }
