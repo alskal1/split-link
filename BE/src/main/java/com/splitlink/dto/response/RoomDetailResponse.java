@@ -1,5 +1,6 @@
 package com.splitlink.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -47,6 +48,7 @@ public class RoomDetailResponse {
         private String name;
 
         /** 방 최초 접속 여부 */
+        @Getter(onMethod_ = {@JsonProperty("isActive")})
         private boolean isActive;
     }
 }

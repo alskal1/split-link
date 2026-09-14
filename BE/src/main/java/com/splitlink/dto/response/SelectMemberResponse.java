@@ -1,5 +1,6 @@
 package com.splitlink.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -20,5 +21,6 @@ public class SelectMemberResponse {
     private String memberName;
 
     /** 멤버의 방 진입 활성화 여부 */
+    @Getter(onMethod_ = {@JsonProperty("isActive")})
     private boolean isActive;
 }
