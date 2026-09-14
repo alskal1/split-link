@@ -102,6 +102,18 @@
         WHERE slug = #{slug}
     </select>
 
+    <!-- 지출 목록 상단 헤더 정보 조회 -->
+    <select id="getExpenseListHeaderData" resultType="com.splitlink.mapper.RoomMapper$ExpenseListHeaderData">
+        SELECT
+            r.title AS roomTitle,
+            m.name AS memberName,
+            r.is_locked AS isLocked
+        FROM rooms r
+        INNER JOIN members m ON r.room_id = m.room_id
+        WHERE r.room_id = #{roomId}
+            AND m.member_id = #{memberId}
+    </select>
+
     <!-- ================================================================= -->
     <!-- U: UPDATE (수정)                                                   -->
     <!-- ================================================================= -->

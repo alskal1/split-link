@@ -3,9 +3,12 @@ package com.splitlink.service;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.entity.Expense;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
+import com.splitlink.mapper.RoomMapper;
+import com.splitlink.mapper.SettlementMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +30,9 @@ import java.util.Set;
 public class ExpenseService {
 
     private final MemberMapper memberMapper;
+    private final RoomMapper roomMapper;
     private final ExpenseMapper expenseMapper;
+    private final SettlementMapper settlementMapper;
     private final RoomAccessValidator roomAccessValidator;
 
     /**
@@ -126,6 +131,72 @@ public class ExpenseService {
                 expenseMapper.insertExpenseShares(shares);
             }
         }
+    }
+
+    /**
+     * 지출 내역 목록 및 상단 정산 요약 정보 조회
+     *
+     * @param slug     방 식별자
+     * @param memberId 현재 접속한 회원 PK
+     * @return 지출 내역 및 정산 정보 응답 DTO
+     */
+    @Transactional(readOnly = true)
+    public ExpenseListResponse getExpenseList(String slug, Long memberId) {
+
+        // 방 존재 및 접근 권한 검증 + roomId 가져오기
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 상단 헤더 데이터 조회 (방 제목, 사용자 이름, isLocked)
+        RoomMapper.ExpenseListHeaderData headerData = roomMapper.getExpenseListHeaderData(roomId, memberId);
+
+        // 방 전체 총 지출 금액 조회 (null 방지 처리)
+        // 일단은 한화로 진행
+        BigDecimal totalExpenseAmount = expenseMapper.findTotalExpenseAmountByRoomId(roomId);
+        if (totalExpenseAmount == null) {
+            totalExpenseAmount = BigDecimal.ZERO;
+        }
+
+        // 내 정산 상태 및 정산 금액 연산 (isLocked 여부에 따른 분기)
+        ExpenseListResponse.SettlementStatus settlementStatus;
+        BigDecimal mySettlementAmount;
+
+        if (headerData.isLocked()) {
+            // [isLocked = true] 이미 정산하기 버튼을 눌러 settlements 테이블에 결과가 들어있는 상태
+            // settlements 테이블에서 sender/receiver 조회 (Single Query)
+            SettlementMapper.SettlementSummary summary = settlementMapper.findSettlementSummary(roomId, memberId);
+
+            BigDecimal sendAmount = (summary != null) ? summary.getTotalSendAmount() : BigDecimal.ZERO;
+            BigDecimal receiveAmount = (summary != null) ?  summary.getTotalReceiveAmount() : BigDecimal.ZERO;
+
+            if (sendAmount.compareTo(totalExpenseAmount) > 0) {
+                settlementStatus = ExpenseListResponse.SettlementStatus.SEND;
+                mySettlementAmount = sendAmount;
+            } else if (receiveAmount.compareTo(totalExpenseAmount) > 0) {
+                settlementStatus = ExpenseListResponse.SettlementStatus.RECEIVE;
+                mySettlementAmount = receiveAmount;
+            } else {
+                settlementStatus = ExpenseListResponse.SettlementStatus.ZERO;
+                mySettlementAmount = BigDecimal.ZERO;
+            }
+        } else {
+            // [isLocked = false] 지출 입력 중이라 정산 미마감 상태
+            settlementStatus = ExpenseListResponse.SettlementStatus.PENDING;
+            mySettlementAmount = null;
+        }
+
+        // 하단 지출 내역 목록 조회 (결제자 이름, 참여자 수, 본인 결제 여부 포함)
+        List<ExpenseListResponse.ExpenseItemResponse> expenses = expenseMapper.findExpenseItems(roomId, memberId);
+
+        // 반환
+        return ExpenseListResponse.builder()
+                .roomTitle(headerData.getRoomTitle())
+                .currentMemberName(headerData.getMemberName())
+                .isLocked(headerData.isLocked())
+                .totalExpenseAmount(totalExpenseAmount)
+                .settlementStatus(settlementStatus)
+                .mySettlementAmount(mySettlementAmount)
+                .expenses(expenses)
+                .build();
     }
 
     /**

@@ -4,6 +4,7 @@ import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.service.ExpenseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,4 +54,17 @@ public class ExpenseController {
                 .body(ApiResponse.success(201, null));
     }
 
+    /**
+     * 지출 내역 목록 및 정산 요약 정보 조회
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<ExpenseListResponse>> getExpenseList(
+            @PathVariable String slug,
+            @AuthMember Long memberId) {
+        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
+
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

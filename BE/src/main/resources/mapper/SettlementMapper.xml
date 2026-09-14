@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.splitlink.mapper.SettlementMapper">
+
+    <!-- settlements 테이블 1회 조회로 보낼 돈과 받을 돈 한 번에 가져오기 -->
+    <select id="findSettlementSummary" resultType="com.splitlink.mapper.SettlementMapper$SettlementSummary">
+        SELECT
+            IFNULL(SUM(CASE WHEN sender_id = #{memberId} THEN amount ELSE 0 END), 0) AS totalSendAmount,
+            IFNULL(SUM(CASE WHEN receiver_id = #{memberId} THEN amount ELSE 0 END), 0) AS totalReceiveAmount
+        FROM settlements
+        WHERE room_id = #{roomId}
+            AND (sender_id = #{memberId} OR receiver_id = #{memberId})
+    </select>
+</mapper>

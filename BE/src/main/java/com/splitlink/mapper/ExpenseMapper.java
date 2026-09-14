@@ -1,8 +1,10 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.entity.Expense;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -20,6 +22,13 @@ public interface ExpenseMapper {
 
     /** 개별 금액이 포함된 부담금 Bulk Insert */
     void insertExpenseShares(@Param("shares") List<ExpenseShareParam> shares);
+
+    /** 방 전체 총 지출 금액 합산 */
+    BigDecimal findTotalExpenseAmountByRoomId(@Param("roomId") Long roomId);
+
+    /** 하단 지출 목록 조회 */
+    List<ExpenseListResponse.ExpenseItemResponse> findExpenseItems(@Param("roomId") Long roomId,
+                                                                   @Param("memberId") Long memberId);
 
     /**
      * 지출 부담금 Bulk Insert 전용 파라미터 전달 DTO
