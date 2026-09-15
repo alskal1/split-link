@@ -7,6 +7,7 @@ import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
+import com.splitlink.mapper.SettlementMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,9 @@ public class ExpenseServiceTest {
 
     @Mock
     private RoomMapper roomMapper;
+
+    @Mock
+    private SettlementMapper settlementMapper;
 
     @Mock
     private RoomAccessValidator roomAccessValidator;
@@ -283,5 +287,93 @@ public class ExpenseServiceTest {
         verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
         verify(expenseMapper).findTotalExpenseAmountByRoomId(roomId);
         verify(expenseMapper).findExpenseItems(roomId, currentMemberId);
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 보낼 금액이 존재하면 SEND 상태와 금액을 반환한다")
+    void getExpenseListSettlementSendStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 10L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        // isLocked = true 상태 모킹
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기영", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액(Send) 5,000원, 받을 금액(Receive) 0원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(new BigDecimal("5000"), BigDecimal.ZERO);
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.SEND);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 받을 금액이 존재하면 RECEIVE 상태와 금액을 반환한다")
+    void getExpenseListSettlementReceiveStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 20L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기철", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액 0원, 받을 금액 5,000원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, new BigDecimal("5000"));
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.RECEIVE);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 보낼 금액과 받을 금액이 모두 0원이면 ZERO 상태를 반환한다")
+    void getExpenseListSettlementZeroStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 30L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "오덕", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액 0원, 받을 금액 0원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, BigDecimal.ZERO);
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.ZERO);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

@@ -168,10 +168,10 @@ public class ExpenseService {
             BigDecimal sendAmount = (summary != null) ? summary.getTotalSendAmount() : BigDecimal.ZERO;
             BigDecimal receiveAmount = (summary != null) ?  summary.getTotalReceiveAmount() : BigDecimal.ZERO;
 
-            if (sendAmount.compareTo(totalExpenseAmount) > 0) {
+            if (sendAmount.compareTo(BigDecimal.ZERO) > 0) {
                 settlementStatus = ExpenseListResponse.SettlementStatus.SEND;
                 mySettlementAmount = sendAmount;
-            } else if (receiveAmount.compareTo(totalExpenseAmount) > 0) {
+            } else if (receiveAmount.compareTo(BigDecimal.ZERO) > 0) {
                 settlementStatus = ExpenseListResponse.SettlementStatus.RECEIVE;
                 mySettlementAmount = receiveAmount;
             } else {
