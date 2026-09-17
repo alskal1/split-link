@@ -168,13 +168,19 @@ public class ExpenseService {
             BigDecimal sendAmount = (summary != null) ? summary.getTotalSendAmount() : BigDecimal.ZERO;
             BigDecimal receiveAmount = (summary != null) ?  summary.getTotalReceiveAmount() : BigDecimal.ZERO;
 
-            if (sendAmount.compareTo(BigDecimal.ZERO) > 0) {
-                settlementStatus = ExpenseListResponse.SettlementStatus.SEND;
-                mySettlementAmount = sendAmount;
-            } else if (receiveAmount.compareTo(BigDecimal.ZERO) > 0) {
+            // 받을 돈에서 보낼 돈을 뺀 순액(Net Amount) 계산
+            BigDecimal netAmount = receiveAmount.subtract(sendAmount);
+
+            if (netAmount.compareTo(BigDecimal.ZERO) > 0) {
+                // 순액이 양수 (+) -> 최종적으로 돈을 받아야 함
                 settlementStatus = ExpenseListResponse.SettlementStatus.RECEIVE;
-                mySettlementAmount = receiveAmount;
+                mySettlementAmount = netAmount;
+            } else if (netAmount.compareTo(BigDecimal.ZERO) < 0) {
+                // 순액이 음수 (-) -> 최종적으로 돈을 보내야 함 (음수를 양수로 변환하기 위해 abs() 사용)
+                settlementStatus = ExpenseListResponse.SettlementStatus.SEND;
+                mySettlementAmount = netAmount.abs();
             } else {
+                // 순액이 0원 -> 낼 것도 받을 것도 없음
                 settlementStatus = ExpenseListResponse.SettlementStatus.ZERO;
                 mySettlementAmount = BigDecimal.ZERO;
             }
