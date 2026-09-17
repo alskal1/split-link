@@ -2,6 +2,7 @@ package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.entity.Expense;
@@ -202,6 +203,45 @@ public class ExpenseService {
                 .settlementStatus(settlementStatus)
                 .mySettlementAmount(mySettlementAmount)
                 .expenses(expenses)
+                .build();
+    }
+
+    /**
+     * 지출 단건 상세 조회
+     *
+     * @param slug      방 식별자 (UUID/Slug)
+     * @param expenseId 지출 PK
+     * @param memberId  현재 접속한 회원 PK
+     * @return 지출 상세 응답 DTO
+     */
+    @Transactional(readOnly = true)
+    public ExpenseDetailResponse getExpenseDetail(String slug, Long expenseId, Long memberId) {
+
+        // 해당 방 존재 여부 및 사용자 접근 권한 검증 -> roomId 가져오기
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 해당 방(roomId)에 속한 지출(expenseId) 기본 정보 및 결제자 정보 조회 (없을 경우 예외 처리)
+        ExpenseDetailResponse detail = expenseMapper.findExpenseDetailById(expenseId, roomId, memberId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
+
+        // 지출 부담 참여자 목록 및 1/N 보정된 개인별 금액 조회
+        List<ExpenseDetailResponse.TargetMemberDetail> targetMembers =
+                expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId);
+
+        // 참여자 목록을 세팅하여 최종 DTO 반환
+        return ExpenseDetailResponse.builder()
+                .expenseId(detail.getExpenseId())
+                .title(detail.getTitle())
+                .amount(detail.getAmount())
+                .currency(detail.getCurrency())
+                .fxRate(detail.getFxRate())
+                .spentAt(detail.getSpentAt())
+                .payerId(detail.getPayerId())
+                .payerName(detail.getPayerName())
+                .bankName(detail.getBankName())
+                .accountNumber(detail.getAccountNumber())
+                .isMyPayment(detail.isMyPayment())
+                .targetMembers(targetMembers)
                 .build();
     }
 

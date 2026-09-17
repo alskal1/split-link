@@ -2,6 +2,7 @@ package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.mapper.ExpenseMapper;
@@ -9,6 +10,7 @@ import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
 import com.splitlink.mapper.SettlementMapper;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -375,5 +377,97 @@ public class ExpenseServiceTest {
         // then
         assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.ZERO);
         assertThat(response.getMySettlementAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Nested
+    @DisplayName("지출 상세 조회 (getExpenseDetail)")
+    class GetExpenseDetailTest {
+
+        private final String slug = "82f31815-3763-4648-8245-d7c5dcd90a24";
+        private final Long roomId = 1L;
+        private final Long expenseId = 2L;
+        private final Long memberId = 38L; // 스펀지밥 (현재 접속자)
+
+        @Test
+        @DisplayName("성공: 지출 상세 정보 및 참여자별 부담금 정보를 정상 조회한다.")
+        void getExpenseDetail_Success() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            ExpenseDetailResponse mockDetail = ExpenseDetailResponse.builder()
+                    .expenseId(expenseId)
+                    .title("점심 돈까스")
+                    .amount(new BigDecimal("30000.00"))
+                    .currency("KRW")
+                    .fxRate(BigDecimal.ONE)
+                    .spentAt(LocalDateTime.of(2026, 9, 9, 18, 30))
+                    .payerId(38L)
+                    .payerName("스펀지밥")
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-3456789")
+                    .isMyPayment(true)
+                    .build();
+
+            List<ExpenseDetailResponse.TargetMemberDetail> mockTargetMembers = List.of(
+                    ExpenseDetailResponse.TargetMemberDetail.builder()
+                            .memberId(38L)
+                            .name("스펀지밥")
+                            .shareAmount(new BigDecimal("15000.00"))
+                            .isSelf(true)
+                            .build(),
+                    ExpenseDetailResponse.TargetMemberDetail.builder()
+                            .memberId(39L)
+                            .name("다람이")
+                            .shareAmount(new BigDecimal("15000.00"))
+                            .isSelf(false)
+                            .build()
+            );
+
+            given(expenseMapper.findExpenseDetailById(expenseId, roomId, memberId))
+                    .willReturn(Optional.of(mockDetail));
+            given(expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId))
+                    .willReturn(mockTargetMembers);
+
+            // when
+            ExpenseDetailResponse result = expenseService.getExpenseDetail(slug, expenseId, memberId);
+
+            // then
+            assertThat(result).isNotNull();
+            assertThat(result.getExpenseId()).isEqualTo(expenseId);
+            assertThat(result.getTitle()).isEqualTo("점심 돈까스");
+            assertThat(result.getAmount()).isEqualByComparingTo("30000.00");
+            assertThat(result.getPayerName()).isEqualTo("스펀지밥");
+            assertThat(result.getBankName()).isEqualTo("카카오뱅크");
+            assertThat(result.isMyPayment()).isTrue();
+
+            // 참여자 목록 검증
+            assertThat(result.getTargetMembers()).hasSize(2);
+            assertThat(result.getTargetMembers().get(0).getName()).isEqualTo("스펀지밥");
+            assertThat(result.getTargetMembers().get(0).isSelf()).isTrue();
+            assertThat(result.getTargetMembers().get(1).getName()).isEqualTo("다람이");
+            assertThat(result.getTargetMembers().get(1).isSelf()).isFalse();
+
+            // 호출 검증
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
+            verify(expenseMapper).findExpenseSharesByExpenseId(expenseId, roomId, memberId);
+        }
+
+        @Test
+        @DisplayName("실패: 해당 방에 존재하지 않는 지출이거나 IDOR 접근 시 IllegalArgumentException이 발생한다.")
+        void getExpenseDetail_NotFound_ThrowsException() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(expenseMapper.findExpenseDetailById(expenseId, roomId, memberId))
+                    .willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.getExpenseDetail(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 지출 내역이 존재하지 않습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
+        }
     }
 }

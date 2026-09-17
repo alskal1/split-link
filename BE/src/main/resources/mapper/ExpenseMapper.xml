@@ -40,6 +40,40 @@
         ORDER BY e.expense_id DESC
     </select>
 
+    <!-- 지출 기본 상세 정보 및 결제자 계좌 조회 -->
+    <select id="findExpenseDetailById" resultType="com.splitlink.dto.response.ExpenseDetailResponse">
+        SELECT
+            e.expense_id AS expenseId,
+            e.title,
+            e.amount,
+            e.currency,
+            e.fx_rate AS fxRate,
+            e.spent_at AS spentAt,
+            e.payer_id AS payerId,
+            m.name AS payerName,
+            m.bank_name AS bankName,
+            m.account_number AS accountNumber,
+            CASE WHEN e.payer_id = #{memberId} THEN TRUE ELSE FALSE END AS isMyPayment
+        FROM expenses e
+        JOIN members m ON e.payer_id = m.member_id
+        WHERE e.expense_id = #{expenseId}
+            AND e.room_id = #{roomId}
+    </select>
+
+    <!-- 해당 지출의 참여자별 최종 부담금 목록 조회 -->
+    <select id="findExpenseSharesByExpenseId" resultType="com.splitlink.dto.response.ExpenseDetailResponse$TargetMemberDetail">
+        SELECT
+            es.member_id AS memberId,
+            m.name,
+            es.amount AS shareAmount,
+            CASE WHEN es.member_id = #{memberId} THEN TRUE ELSE FALSE END AS isSelf
+        FROM expense_shares es
+        JOIN members m ON es.member_id = m.member_id
+        WHERE es.expense_id = #{expenseId}
+          AND m.room_id = #{roomId}
+        ORDER BY es.member_id ASC
+    </select>
+
     <!-- 지출 내역 등록 -->
     <insert id="insertExpense"
             parameterType="com.splitlink.entity.Expense"

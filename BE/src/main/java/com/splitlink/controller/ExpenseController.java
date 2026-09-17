@@ -3,6 +3,7 @@ package com.splitlink.controller;
 import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.service.ExpenseService;
@@ -64,6 +65,21 @@ public class ExpenseController {
         log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
         ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 지출 내역 상세 조회
+     */
+    @GetMapping("/{expenseId}")
+    public ResponseEntity<ApiResponse<ExpenseDetailResponse>> getExpenseDetail(
+            @PathVariable String slug,
+            @PathVariable Long expenseId,
+            @AuthMember Long memberId) {
+        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
+
+        ExpenseDetailResponse response = expenseService.getExpenseDetail(slug, expenseId, memberId);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
