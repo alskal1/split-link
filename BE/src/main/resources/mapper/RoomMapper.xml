@@ -122,6 +122,15 @@
             AND m.member_id = #{memberId}
     </select>
 
+    <!-- 방 마감 및 완료 상태 조회 -->
+    <select id="findRoomStatusBySlug" resultType="com.splitlink.mapper.RoomMapper$RoomStatus">
+        SELECT
+            is_locked AS isLocked,
+            is_closed AS isClosed
+        FROM rooms
+        WHERE slug = #{slug}
+    </select>
+
     <!-- ================================================================= -->
     <!-- U: UPDATE (수정)                                                   -->
     <!-- ================================================================= -->

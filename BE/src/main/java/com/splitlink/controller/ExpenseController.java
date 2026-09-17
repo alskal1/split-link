@@ -83,4 +83,16 @@ public class ExpenseController {
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @DeleteMapping("/{expenseId}")
+    public ResponseEntity<ApiResponse<Void>> deleteExpense(
+            @PathVariable String slug,
+            @PathVariable Long expenseId,
+            @AuthMember Long memberId) {
+        log.info(">>>> [JWT Auth Success] slug: {}, expenseId: {}, memberId: {}", slug, expenseId, memberId);
+
+        expenseService.deleteExpense(slug, expenseId, memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

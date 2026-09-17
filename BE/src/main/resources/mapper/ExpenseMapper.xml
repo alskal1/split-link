@@ -114,4 +114,11 @@
             )
         </foreach>
     </insert>
+
+    <!-- 지출 내역 삭제 -->
+    <delete id="deleteExpenseById">
+        DELETE FROM expenses
+        WHERE expense_id = #{expenseId}
+          AND room_id = #{roomId}
+    </delete>
 </mapper>

@@ -470,4 +470,101 @@ public class ExpenseServiceTest {
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
         }
     }
+
+    @Nested
+    @DisplayName("지출 내역 삭제 (deleteExpense)")
+    class DeleteExpenseTest {
+
+        private final String slug = "test-room-slug";
+        private final Long roomId = 10L;
+        private final Long expenseId = 1L;
+        private final Long memberId = 100L;
+
+        @Test
+        @DisplayName("성공: 올바른 방 식별자, 지출 ID 및 회원 ID로 요청 시 지출 내역을 성공적으로 삭제한다.")
+        void deleteExpenseSuccess() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(expenseMapper.deleteExpenseById(expenseId, roomId)).willReturn(1);
+
+            // when & then
+            expenseService.deleteExpense(slug, expenseId, memberId);
+
+            // verify
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(expenseMapper).deleteExpenseById(expenseId, roomId);
+        }
+
+        @Test
+        @DisplayName("예외: 정산이 이미 완료(isClosed=true)된 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void deleteExpenseThrowExceptionWhenRoomIsClosed() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(true)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.deleteExpense(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 정산이 완료된 방의 지출은 삭제할 수 없습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+        }
+
+        @Test
+        @DisplayName("예외: 지출 입력이 잠긴(isLocked=true) 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void deleteExpenseThrowExceptionWhenRoomIsLocked() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(true)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.deleteExpense(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 지출 입력이 잠긴 방의 지출은 삭제할 수 없습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+        }
+
+        @Test
+        @DisplayName("예외: 존재하지 않는 지출 ID이거나 영향받은 행이 0개인 경우 IllegalArgumentException 예외가 발생한다.")
+        void deleteExpenseThrowExceptionWhenExpenseNotFound() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(expenseMapper.deleteExpenseById(expenseId, roomId)).willReturn(0);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.deleteExpense(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(expenseMapper).deleteExpenseById(expenseId, roomId);
+        }
+    }
 }

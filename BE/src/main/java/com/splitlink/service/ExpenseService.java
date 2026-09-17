@@ -246,6 +246,39 @@ public class ExpenseService {
     }
 
     /**
+     * 지출 내역 삭제
+     *
+     * @param slug      방 식별자 (UUID/Slug)
+     * @param expenseId 삭제할 지출 PK
+     * @param memberId  현재 접속한 회원 PK
+     */
+    @Transactional
+    public void deleteExpense(String slug, Long expenseId, Long memberId) {
+
+        // 방 접근 권한 및 방 존재 검증 후 roomId 반환
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 방 마감 상태(isLocked, isClosed) 쿼리 1개로 조회 및 각각 검증
+        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
+
+        if (status == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+        if (status.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 완료된 방의 지출은 삭제할 수 없습니다.");
+        }
+        if (status.isLocked()) {
+            throw new IllegalArgumentException("이미 지출 입력이 잠긴 방의 지출은 삭제할 수 없습니다.");
+        }
+
+        // 지출 삭제 (expenses 삭제 시 FK ON DELETE CASCADE 조건으로 expense_shares 자동 삭제)
+        int deletedRows = expenseMapper.deleteExpenseById(expenseId, roomId);
+        if (deletedRows == 0) {
+            throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
+        }
+    }
+
+    /**
      * 1/N 부담금 계산 및 1원 오차 보정 헬퍼 메서드
      * (소수점 버림 후 남은 차액은 첫 번째 참여자에게 가산)
      */

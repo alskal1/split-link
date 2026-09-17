@@ -59,6 +59,10 @@ public interface RoomMapper {
     /** 지출 목록 상단 헤더 정보 조회 (방 제목, 사용자 이름, 정산 마감 여부) */
     ExpenseListHeaderData getExpenseListHeaderData(@Param("roomId") Long roomId,
                                                    @Param("memberId") Long memberId);
+
+    /** slug 기준 지출 입력 마감 및 정산 완료 상태 조회 */
+    RoomStatus findRoomStatusBySlug(@Param("slug") String slug);
+
     @Getter
     @Builder
     @NoArgsConstructor
@@ -67,5 +71,14 @@ public interface RoomMapper {
         private String roomTitle;
         private String memberName;
         private boolean isLocked;
+    }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class RoomStatus {
+        private boolean isLocked;
+        private boolean isClosed;
     }
 }

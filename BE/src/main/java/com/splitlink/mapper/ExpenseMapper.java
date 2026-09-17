@@ -44,6 +44,10 @@ public interface ExpenseMapper {
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);
 
+    /** 지출 ID와 방 ID 조건을 함께 검증하여 삭제 */
+    int deleteExpenseById(@Param("expenseId") Long expenseId,
+                          @Param("roomId") Long roomId);
+
     /**
      * 지출 부담금 Bulk Insert 전용 파라미터 전달 DTO
      */
