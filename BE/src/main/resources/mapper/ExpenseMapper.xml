@@ -70,6 +70,7 @@
         FROM expense_shares es
         JOIN members m ON es.member_id = m.member_id
         WHERE es.expense_id = #{expenseId}
+          AND m.room_id = #{roomId}
         ORDER BY es.member_id ASC
     </select>
 

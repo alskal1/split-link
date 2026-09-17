@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.splitlink.common.jwt.JwtProvider;
 import com.splitlink.common.resolver.AuthMemberArgumentResolver;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.service.ExpenseService;
@@ -278,6 +279,87 @@ public class ExpenseControllerTest {
                             .header("Authorization", "Bearer " + mockToken)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest())
+                    .andDo(print());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/rooms/{slug}/expenses/{expenseId} - 지출 단건 상세 조회")
+    class GetExpenseDetail {
+
+        @Test
+        @DisplayName("성공: 올바른 slug 및 expenseId 요청 시 200 OK와 상세 데이터를 반환한다")
+        void getExpenseDetailSuccess() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expenseId = 1L;
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            ExpenseDetailResponse.TargetMemberDetail targetMember = ExpenseDetailResponse.TargetMemberDetail.builder()
+                    .memberId(expectedMemberId)
+                    .name("스펀지밥")
+                    .shareAmount(new BigDecimal("15000"))
+                    .isSelf(true)
+                    .build();
+
+            ExpenseDetailResponse response = ExpenseDetailResponse.builder()
+                    .expenseId(expenseId)
+                    .title("점심 돈까스")
+                    .amount(new BigDecimal("30000"))
+                    .currency("KRW")
+                    .fxRate(BigDecimal.ONE)
+                    .spentAt(LocalDateTime.of(2026, 9, 9, 18, 30))
+                    .payerId(expectedMemberId)
+                    .payerName("스펀지밥")
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-3456789")
+                    .isMyPayment(true)
+                    .targetMembers(List.of(targetMember))
+                    .build();
+
+            given(expenseService.getExpenseDetail(eq(slug), eq(expenseId), eq(expectedMemberId)))
+                    .willReturn(response);
+
+            // when & then
+            mockMvc.perform(get("/api/rooms/{slug}/expenses/{expenseId}", slug, expenseId)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(200))
+                    .andExpect(jsonPath("$.message").value("SUCCESS"))
+                    .andExpect(jsonPath("$.data.expenseId").value(expenseId))
+                    .andExpect(jsonPath("$.data.title").value("점심 돈까스"))
+                    .andExpect(jsonPath("$.data.isMyPayment").value(true))
+                    .andExpect(jsonPath("$.data.targetMembers[0].name").value("스펀지밥"))
+                    .andDo(print());
+        }
+
+        @Test
+        @DisplayName("예외: 존재하지 않는 지출 ID이거나 타 방 지출(IDOR) 접근 시 400 Bad Request를 반환한다")
+        void getExpenseDetailNotFoundError() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long invalidExpenseId = 999L;
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            willThrow(new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."))
+                    .given(expenseService).getExpenseDetail(eq(slug), eq(invalidExpenseId), eq(expectedMemberId));
+
+            // when & then
+            mockMvc.perform(get("/api/rooms/{slug}/expenses/{expenseId}", slug, invalidExpenseId)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.message").value("해당 지출 내역이 존재하지 않습니다."))
                     .andDo(print());
         }
     }

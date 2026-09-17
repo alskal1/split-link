@@ -425,7 +425,7 @@ public class ExpenseServiceTest {
 
             given(expenseMapper.findExpenseDetailById(expenseId, roomId, memberId))
                     .willReturn(Optional.of(mockDetail));
-            given(expenseMapper.findExpenseSharesByExpenseId(expenseId, memberId))
+            given(expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId))
                     .willReturn(mockTargetMembers);
 
             // when
@@ -450,7 +450,7 @@ public class ExpenseServiceTest {
             // 호출 검증
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
-            verify(expenseMapper).findExpenseSharesByExpenseId(expenseId, memberId);
+            verify(expenseMapper).findExpenseSharesByExpenseId(expenseId, roomId, memberId);
         }
 
         @Test

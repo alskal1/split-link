@@ -226,7 +226,7 @@ public class ExpenseService {
 
         // 지출 부담 참여자 목록 및 1/N 보정된 개인별 금액 조회
         List<ExpenseDetailResponse.TargetMemberDetail> targetMembers =
-                expenseMapper.findExpenseSharesByExpenseId(expenseId, memberId);
+                expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId);
 
         // 참여자 목록을 세팅하여 최종 DTO 반환
         return ExpenseDetailResponse.builder()
