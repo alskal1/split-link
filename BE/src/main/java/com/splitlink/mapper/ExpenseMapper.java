@@ -39,7 +39,10 @@ public interface ExpenseMapper {
 
     /** 지출 참여자 목록 및 부담 금액 조회 */
     List<ExpenseDetailResponse.TargetMemberDetail> findExpenseSharesByExpenseId(@Param("expenseId") Long expenseId,
+                                                                                @Param("roomId") Long roomId,
                                                                                 @Param("memberId") Long memberId);
+    /** 방 PK 기준 지출 건수 조회 */
+    int countExpensesByRoomId(@Param("roomId") Long roomId);
 
     /**
      * 지출 부담금 Bulk Insert 전용 파라미터 전달 DTO

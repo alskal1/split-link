@@ -42,4 +42,15 @@ public class RoomAccessValidator {
             throw new IllegalArgumentException("해당 방에 속하지 않은 참여자가 포함되어 있습니다.");
         }
     }
+
+    /**
+     * 방 존재 여부 및 입장코드(PIN)를 '단 1번의 DB 쿼리'로 검증하고 roomId를 반환 (public 수정 완료)
+     */
+    public Long validatePinAndGetRoomId(String slug, String inputPin) {
+        Long roomId = roomMapper.findRoomIdBySlugAndPin(slug, inputPin);
+        if (roomId == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
+        }
+        return roomId;
+    }
 }

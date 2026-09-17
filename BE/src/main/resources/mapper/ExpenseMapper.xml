@@ -4,6 +4,13 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.ExpenseMapper">
 
+    <!-- 방 기준 지출 건수 조회 -->
+    <select id="countExpensesByRoomId" resultType="int">
+        SELECT COUNT(*)
+        FROM expenses
+        WHERE room_id = #{roomId}
+    </select>
+
     <!-- 방 전체 총 지출 합계 -->
     <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
         SELECT IFNULL(SUM(amount), 0)

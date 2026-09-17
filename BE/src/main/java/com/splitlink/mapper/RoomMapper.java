@@ -36,6 +36,10 @@ public interface RoomMapper {
     /** slug 기준 정답 입장코드(PIN) 조회 */
     String findPinBySlug(String slug);
 
+    /** slug, 입장코드(PIN) 검사 후 방 PK 조회 */
+    Long findRoomIdBySlugAndPin (@Param("slug") String slug,
+                                 @Param("pin") String pin);
+
     /** 방 기본 정보 수정 */
     int updateRoom(@Param("slug") String slug,
                    @Param("title") String title,

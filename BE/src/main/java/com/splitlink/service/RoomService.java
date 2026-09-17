@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
 import com.splitlink.dto.request.RoomUpdateRequest;
@@ -7,6 +8,7 @@ import com.splitlink.dto.response.RoomCreateResponse;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Room;
+import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ public class RoomService {
 
     private final RoomMapper roomMapper;
     private final MemberMapper memberMapper;
+    private final ExpenseMapper expenseMapper;
+    private final RoomAccessValidator roomAccessValidator;
 
     private static final String PIN_REGEX = "^[a-zA-Z0-9]{4,10}$";
 
@@ -157,16 +161,19 @@ public class RoomService {
     public void deleteRoom(String slug, RoomAccessRequest request) {
         log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
-        // 1. 해당 방 존재 확인 및 입장코드 일치 검사
-        validatePin(slug, request.getPin());
+        // 방 존재 & PIN 일치 검증 후 roomId 획득
+        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, request.getPin());
 
-        // 2. 정산 완료 여부 확인 (Boolean.TRUE.equals로 null-safe 처리)
+        // 방의 지출 건수 및 정산 마감 여부 조회
+        int expenseCount = expenseMapper.countExpensesByRoomId(roomId);
         Boolean isClosed = roomMapper.findIsClosedBySlug(slug);
-        if (!Boolean.TRUE.equals(isClosed)) {
+
+        // 삭제 조건 검증 (지출 내역이 1건 이상 존재하는 경우 반드시 정산 마감 상태여야 함)
+        if (expenseCount > 0 && !Boolean.TRUE.equals(isClosed)) {
             throw new IllegalArgumentException("해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.");
         }
 
-        // 3. slug 기반 방 삭제 및 결과 안정성 검증 (정확히 1건 삭제되어야 함)
+        // slug 기반 방 삭제 및 결과 안정성 검증 (정확히 1건 삭제되어야 함)
         int deletedRows = roomMapper.deleteRoom(slug);
         if (deletedRows != 1) {
             throw new IllegalArgumentException("존재하지 않거나 삭제할 수 없는 방입니다.");
