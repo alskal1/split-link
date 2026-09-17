@@ -3,8 +3,11 @@ package com.splitlink.service;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
+import com.splitlink.mapper.RoomMapper;
+import com.splitlink.mapper.SettlementMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +40,12 @@ public class ExpenseServiceTest {
 
     @Mock
     private ExpenseMapper expenseMapper;
+
+    @Mock
+    private RoomMapper roomMapper;
+
+    @Mock
+    private SettlementMapper settlementMapper;
 
     @Mock
     private RoomAccessValidator roomAccessValidator;
@@ -213,5 +222,158 @@ public class ExpenseServiceTest {
         assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("해당 방에 속하지 않은 참여자가 포함되어 있습니다.");
+    }
+
+    @Test
+    @DisplayName("성공: 지출 목록 조회 시 방 정보, 총액 및 isMyPayment, targetMemberCount가 포함된 목록을 반환한다.")
+    void getExpenseListSuccess() {
+        // given
+        String slug = "test-room-slug";
+        Long currentMemberId = 1L;
+        Long roomId = 10L;
+
+        // 1. roomMapper가 반환할 HeaderData 모킹 준비
+        RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
+                .roomTitle("일본 여행 정산방")
+                .memberName("스펀지밥")
+                .isLocked(false)
+                .build();
+
+        // 2. 지출 아이템 모킹 데이터 준비
+        ExpenseListResponse.ExpenseItemResponse item1 = ExpenseListResponse.ExpenseItemResponse.builder()
+                .expenseId(3L)
+                .title("후식 메론")
+                .amount(new BigDecimal("15000"))
+                .payerName("스펀지밥")
+                .targetMemberCount(2)
+                .isMyPayment(true)
+                .build();
+
+        ExpenseListResponse.ExpenseItemResponse item2 = ExpenseListResponse.ExpenseItemResponse.builder()
+                .expenseId(2L)
+                .title("점심 돈까스")
+                .amount(new BigDecimal("30000"))
+                .payerName("스펀지밥")
+                .targetMemberCount(2)
+                .isMyPayment(true)
+                .build();
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+
+        given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("45000"));
+        given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(item1, item2));
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, currentMemberId);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.getRoomTitle()).isEqualTo("일본 여행 정산방");
+        assertThat(response.getCurrentMemberName()).isEqualTo("스펀지밥");
+        assertThat(response.getTotalExpenseAmount()).isEqualByComparingTo(new BigDecimal("45000"));
+        assertThat(response.isLocked()).isFalse();
+
+        // 지출 목록 검증
+        assertThat(response.getExpenses()).hasSize(2);
+        assertThat(response.getExpenses().get(0).getExpenseId()).isEqualTo(3L);
+        assertThat(response.getExpenses().get(0).getTitle()).isEqualTo("후식 메론");
+        assertThat(response.getExpenses().get(0).isMyPayment()).isTrue();
+        assertThat(response.getExpenses().get(0).getTargetMemberCount()).isEqualTo(2);
+
+        // verify
+        verify(roomAccessValidator).validateAndGetRoomId(slug, currentMemberId);
+        verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
+        verify(expenseMapper).findTotalExpenseAmountByRoomId(roomId);
+        verify(expenseMapper).findExpenseItems(roomId, currentMemberId);
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 보낼 금액이 존재하면 SEND 상태와 금액을 반환한다")
+    void getExpenseListSettlementSendStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 10L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        // isLocked = true 상태 모킹
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기영", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액(Send) 5,000원, 받을 금액(Receive) 0원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(new BigDecimal("5000"), BigDecimal.ZERO);
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.SEND);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 받을 금액이 존재하면 RECEIVE 상태와 금액을 반환한다")
+    void getExpenseListSettlementReceiveStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 20L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기철", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액 0원, 받을 금액 5,000원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, new BigDecimal("5000"));
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.RECEIVE);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+    }
+
+    @Test
+    @DisplayName("성공: isLocked=true일 때 보낼 금액과 받을 금액이 모두 0원이면 ZERO 상태를 반환한다")
+    void getExpenseListSettlementZeroStatusTest() {
+        // given
+        String slug = "test-slug";
+        Long roomId = 1L;
+        Long memberId = 30L;
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+        RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "오덕", true);
+        given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
+
+        given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+
+        // 보낼 금액 0원, 받을 금액 0원 모킹
+        SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, BigDecimal.ZERO);
+        given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
+
+        given(expenseMapper.findExpenseItems(roomId, memberId)).willReturn(List.of());
+
+        // when
+        ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
+
+        // then
+        assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.ZERO);
+        assertThat(response.getMySettlementAmount()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

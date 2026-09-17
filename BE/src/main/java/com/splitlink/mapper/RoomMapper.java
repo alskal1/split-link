@@ -1,8 +1,13 @@
 package com.splitlink.mapper;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Room;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -46,4 +51,17 @@ public interface RoomMapper {
 
     /** slug 기준 방 및 관련 데이터 삭제 */
     int deleteRoom(String slug);
+
+    /** 지출 목록 상단 헤더 정보 조회 (방 제목, 사용자 이름, 정산 마감 여부) */
+    ExpenseListHeaderData getExpenseListHeaderData(@Param("roomId") Long roomId,
+                                                   @Param("memberId") Long memberId);
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ExpenseListHeaderData {
+        private String roomTitle;
+        private String memberName;
+        private boolean isLocked;
+    }
 }
