@@ -2,9 +2,11 @@ package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.request.ExpenseUpdateRequest;
 import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
+import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.entity.Expense;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
@@ -243,6 +245,111 @@ public class ExpenseService {
                 .isMyPayment(detail.isMyPayment())
                 .targetMembers(targetMembers)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseUpdateFormResponse getExpenseUpdateForm(String slug, Long expenseId, Long memberId) {
+
+        // 방 접근 권한 검증 및 roomId 가져오기
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 방 마감 상태(isLocked, isClosed) 검증
+        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
+        if (status == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+        if (status.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 완료된 방의 지출은 수정할 수 없습니다.");
+        }
+        if (status.isLocked()) {
+            throw new IllegalArgumentException("이미 지출 입력이 잠긴 방의 지출은 수정할 수 없습니다.");
+        }
+
+        // 지출 기본 정보 조회 (제목, 금액, 결제일시, 결제자ID)
+        ExpenseUpdateFormResponse form = expenseMapper.findExpenseUpdateFormById(expenseId, roomId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
+
+        // 지출에 선택되어 있던 참여자 ID 목록 조회
+        List<Long> targetMemberIds = expenseMapper.findTargetMemberIdsByExpenseId(expenseId);
+
+        // 방 소속 전체 멤버 목록 조회
+        List<ExpenseFormInitResponse.MemberInfo> roomMembers = memberMapper.findRoomMembersBySlug(slug, memberId);
+
+        // MemberInfo 타입 매핑 (ExpenseFormInitResponse.MemberInfo -> ExpenseUpdateFormResponse.MemberInfo)
+        List<ExpenseUpdateFormResponse.MemberInfo> mappedMembers = roomMembers.stream()
+                .map(m -> ExpenseUpdateFormResponse.MemberInfo.builder()
+                        .memberId(m.getMemberId())
+                        .name(m.getName())
+                        .isActive(m.isActive())
+                        .build())
+                .toList();
+
+        // 최종 수정 폼 DTO 조립 및 반환
+        return ExpenseUpdateFormResponse.builder()
+                .expenseId(form.getExpenseId())
+                .title(form.getTitle())
+                .amount(form.getAmount())
+                .currency(form.getCurrency())
+                .spentAt(form.getSpentAt())
+                .payerId(form.getPayerId())
+                .targetMemberIds(targetMemberIds)
+                .roomMembers(mappedMembers)
+                .build();
+    }
+
+    /**
+     * 지출 내역 수정
+     *
+     * @param slug      방 식별자 (UUID/Slug)
+     * @param expenseId 수정할 지출 PK
+     * @param memberId  현재 JWT 인증된 회원 PK
+     * @param request   지출 수정 요청 DTO
+     */
+    @Transactional
+    public void updateExpense(String slug, Long expenseId, Long memberId, ExpenseUpdateRequest request) {
+
+        // 방 접근 권한 및 방 존재 검증 후 roomId 반환
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 방 마감 상태(isLocked, isClosed) 검증
+        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
+        if (status == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+        if (status.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 완료된 방의 지출은 수정할 수 없습니다.");
+        }
+        if (status.isLocked()){
+            throw new IllegalArgumentException("이미 지출 입력이 완료된 방의 지출은 수정할 수 없습니다.");
+        }
+
+        // 요청 바디의 payerId 및 targetMemberIds가 해당 방 소속 멤버인지 일괄 검증 (IDOR 방지)
+        Set<Long> requestMemberIds = new HashSet<>(request.getTargetMemberIds());
+        requestMemberIds.add(request.getPayerId());
+        roomAccessValidator.validateMembersInRoom(roomId, new ArrayList<>(requestMemberIds));
+
+        // 메인 지출 데이터 수정
+        int updatedRows = expenseMapper.updateExpense(
+                expenseId,
+                roomId,
+                request.getPayerId(),
+                request.getTitle(),
+                request.getAmount(),
+                request.getSpentAt()
+        );
+        if (updatedRows == 0) {
+            throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
+        }
+
+        // 기존 부담금(expense_shares) 삭제 후 1/N 오차 보정하여 새 부담금 재등록
+        expenseMapper.deleteExpenseSharesByExpenseId(expenseId);
+
+        List<ExpenseMapper.ExpenseShareParam> newShares = calculateShares(
+                expenseId,
+                request.getAmount(),
+                request.getTargetMemberIds()
+        );
+        expenseMapper.insertExpenseShares(newShares);
     }
 
     /**

@@ -74,6 +74,27 @@
         ORDER BY es.member_id ASC
     </select>
 
+    <!-- 지출 수정 폼 기본 데이터 조회 -->
+    <select id="findExpenseUpdateFormById" resultType="com.splitlink.dto.response.ExpenseUpdateFormResponse">
+        SELECT
+            expense_id AS expenseId,
+            title,
+            amount,
+            currency,
+            spent_at AS spentAt,
+            payer_id AS payerId
+        FROM expenses
+        WHERE expense_id = #{expenseId}
+          AND room_id = #{roomId}
+    </select>
+
+    <!-- 해당 지출에 참여한 멤버 PK 목록 조회 -->
+    <select id="findTargetMemberIdsByExpenseId" resultType="java.lang.Long">
+        SELECT member_id AS memberId
+        FROM expense_shares
+        WHERE expense_id = #{expenseId}
+    </select>
+
     <!-- 지출 내역 등록 -->
     <insert id="insertExpense"
             parameterType="com.splitlink.entity.Expense"
@@ -115,10 +136,28 @@
         </foreach>
     </insert>
 
+    <!-- 지출 메인 정보 수정 -->
+    <update id="updateExpense">
+        UPDATE expenses
+        SET
+            payer_id = #{payerId},
+            title = #{title},
+            amount = #{amount},
+            spent_at = #{spentAt}
+        WHERE expense_id = #{expenseId}
+          AND room_id = #{roomId}
+    </update>
+
     <!-- 지출 내역 삭제 -->
     <delete id="deleteExpenseById">
         DELETE FROM expenses
         WHERE expense_id = #{expenseId}
           AND room_id = #{roomId}
+    </delete>
+
+    <!-- 해당 지출의 기존 부담금 데이터 삭제 -->
+    <delete id="deleteExpenseSharesByExpenseId">
+        DELETE FROM expense_shares
+        WHERE expense_id = #{expenseId}
     </delete>
 </mapper>
