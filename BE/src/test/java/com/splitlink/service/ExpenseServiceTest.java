@@ -2,9 +2,11 @@ package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
+import com.splitlink.dto.request.ExpenseUpdateRequest;
 import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
+import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
@@ -467,6 +469,288 @@ public class ExpenseServiceTest {
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
+        }
+    }
+
+    @Nested
+    @DisplayName("지출 수정 폼 데이터 조회 (getExpenseUpdateForm)")
+    class GetExpenseUpdateFormTest {
+
+        private final String slug = "test-room-slug";
+        private final Long roomId = 10L;
+        private final Long expenseId = 100L;
+        private final Long memberId = 1L;
+
+        @Test
+        @DisplayName("성공: 지출 기본 정보, 참여자 ID 목록, 방 멤버 목록을 정상 조립하여 반환한다.")
+        void getExpenseUpdateForm_Success() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            ExpenseUpdateFormResponse mockForm = ExpenseUpdateFormResponse.builder()
+                    .expenseId(expenseId)
+                    .title("돈까스 정식")
+                    .amount(new BigDecimal("25000"))
+                    .currency("KRW")
+                    .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
+                    .payerId(1L)
+                    .build();
+
+            List<Long> mockTargetMemberIds = List.of(1L, 2L);
+
+            // 기존 MemberMapper의 findRoomMembersBySlug 반환 타입(ExpenseFormInitResponse.MemberInfo) 모킹
+            List<ExpenseFormInitResponse.MemberInfo> mockRoomMembers = List.of(
+                    ExpenseFormInitResponse.MemberInfo.builder()
+                            .memberId(1L)
+                            .name("스펀지밥")
+                            .isActive(true)
+                            .isSelf(true)
+                            .build(),
+                    ExpenseFormInitResponse.MemberInfo.builder()
+                            .memberId(2L)
+                            .name("뚱이")
+                            .isActive(false)
+                            .isSelf(false)
+                            .build()
+            );
+
+            given(expenseMapper.findExpenseUpdateFormById(expenseId, roomId))
+                    .willReturn(Optional.of(mockForm));
+            given(expenseMapper.findTargetMemberIdsByExpenseId(expenseId))
+                    .willReturn(mockTargetMemberIds);
+            given(memberMapper.findRoomMembersBySlug(slug, memberId))
+                    .willReturn(mockRoomMembers);
+
+            // when
+            ExpenseUpdateFormResponse result = expenseService.getExpenseUpdateForm(slug, expenseId, memberId);
+
+            // then
+            assertThat(result).isNotNull();
+            assertThat(result.getExpenseId()).isEqualTo(expenseId);
+            assertThat(result.getTitle()).isEqualTo("돈까스 정식");
+            assertThat(result.getAmount()).isEqualByComparingTo("25000");
+            assertThat(result.getPayerId()).isEqualTo(1L);
+            assertThat(result.getTargetMemberIds()).containsExactly(1L, 2L);
+
+            // stream().map()을 통해 ExpenseUpdateFormResponse.MemberInfo로 정상 매핑되었는지 검증
+            assertThat(result.getRoomMembers()).hasSize(2);
+            assertThat(result.getRoomMembers().get(0).getMemberId()).isEqualTo(1L);
+            assertThat(result.getRoomMembers().get(0).getName()).isEqualTo("스펀지밥");
+            assertThat(result.getRoomMembers().get(0).isActive()).isTrue();
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(expenseMapper).findExpenseUpdateFormById(expenseId, roomId);
+            verify(expenseMapper).findTargetMemberIdsByExpenseId(expenseId);
+            verify(memberMapper).findRoomMembersBySlug(slug, memberId);
+        }
+
+        @Test
+        @DisplayName("예외: 존재하지 않는 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void getExpenseUpdateForm_ThrowExceptionWhenRoomNotFound() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(null);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.getExpenseUpdateForm(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("존재하지 않는 방입니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+        }
+
+        @Test
+        @DisplayName("예외: 정산이 완료(isClosed=true)된 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void getExpenseUpdateForm_ThrowExceptionWhenRoomIsClosed() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(true)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.getExpenseUpdateForm(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 정산이 완료된 방의 지출은 수정할 수 없습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+        }
+
+        @Test
+        @DisplayName("예외: 지출 입력이 잠긴(isLocked=true) 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void getExpenseUpdateForm_ThrowExceptionWhenRoomIsLocked() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(true)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.getExpenseUpdateForm(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 지출 입력이 잠긴 방의 지출은 수정할 수 없습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+        }
+
+        @Test
+        @DisplayName("예외: 해당 방에 지출 내역이 존재하지 않을 경우 IllegalArgumentException 예외가 발생한다.")
+        void getExpenseUpdateForm_ThrowExceptionWhenExpenseNotFound() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(expenseMapper.findExpenseUpdateFormById(expenseId, roomId)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.getExpenseUpdateForm(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 지출 내역이 존재하지 않습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(expenseMapper).findExpenseUpdateFormById(expenseId, roomId);
+        }
+    }
+
+    @Nested
+    @DisplayName("지출 내역 수정 (updateExpense)")
+    class UpdateExpenseTest {
+
+        private final String slug = "test-room-slug";
+        private final Long roomId = 10L;
+        private final Long expenseId = 1L;
+        private final Long memberId = 100L;
+
+        private ExpenseUpdateRequest createRequest(Long payerId, List<Long> targetMemberIds) {
+            return ExpenseUpdateRequest.builder()
+                    .payerId(payerId)
+                    .title("수정된 점심 식사")
+                    .amount(new BigDecimal("30000"))
+                    .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
+                    .targetMemberIds(targetMemberIds)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("성공: 올바른 요청 시 기존 지출 및 부담금을 수정하고 새 부담금을 계산하여 재등록한다.")
+        void updateExpense_Success() {
+            // given
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(expenseMapper.updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+            )).willReturn(1);
+
+            given(expenseMapper.deleteExpenseSharesByExpenseId(expenseId)).willReturn(2);
+
+            // when
+            expenseService.updateExpense(slug, expenseId, memberId, request);
+
+            // then
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(roomAccessValidator).validateMembersInRoom(eq(roomId), anyList());
+            verify(expenseMapper).updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+            );
+            verify(expenseMapper).deleteExpenseSharesByExpenseId(expenseId);
+            verify(expenseMapper).insertExpenseShares(anyList());
+        }
+
+        @Test
+        @DisplayName("예외: 정산 완료(isClosed=true) 상태인 경우 예외가 발생한다.")
+        void updateExpense_ThrowExceptionWhenRoomIsClosed() {
+            // given
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(true)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 정산이 완료된 방의 지출은 수정할 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 지출 입력 완료(isLocked=true) 상태인 경우 예외가 발생한다.")
+        void updateExpense_ThrowExceptionWhenRoomIsLocked() {
+            // given
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(true)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 지출 입력이 완료된 방의 지출은 수정할 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 존재하지 않는 지출이거나 업데이트된 행이 0개인 경우 예외가 발생한다.")
+        void updateExpense_ThrowExceptionWhenExpenseNotFound() {
+            // given
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(expenseMapper.updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+            )).willReturn(0);
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
     }
 

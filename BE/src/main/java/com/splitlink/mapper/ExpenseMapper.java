@@ -1,7 +1,9 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.request.ExpenseUpdateRequest;
 import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
+import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.entity.Expense;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,6 +12,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,8 +44,27 @@ public interface ExpenseMapper {
     List<ExpenseDetailResponse.TargetMemberDetail> findExpenseSharesByExpenseId(@Param("expenseId") Long expenseId,
                                                                                 @Param("roomId") Long roomId,
                                                                                 @Param("memberId") Long memberId);
+
+    /** 지출 수정 폼 기본 데이터 조회 (제목, 금액, 통화, 결제일시, 결제자ID) */
+    Optional<ExpenseUpdateFormResponse> findExpenseUpdateFormById(@Param("expenseId") Long expenseId,
+                                                                   @Param("roomId") Long roomId);
+
+    /** 지출에 참여 중인 멤버 ID 목록 조회 */
+    List<Long> findTargetMemberIdsByExpenseId(@Param("expenseId") Long expenseId);
+
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);
+
+    /** 지출 메인 정보 수정 */
+    int updateExpense(@Param("expenseId") Long expenseId,
+                      @Param("roomId") Long roomId,
+                      @Param("payerId") Long payerId,
+                      @Param("title") String title,
+                      @Param("amount") BigDecimal amount,
+                      @Param("spentAt") LocalDateTime spentAt);
+
+    /** 특정 지출의 기존 부담금(expense_shares) 일괄 삭제 */
+    int deleteExpenseSharesByExpenseId(@Param("expenseId") Long expenseId);
 
     /** 지출 ID와 방 ID 조건을 함께 검증하여 삭제 */
     int deleteExpenseById(@Param("expenseId") Long expenseId,
