@@ -28,8 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class ExpenseServiceTest {
@@ -565,6 +564,24 @@ public class ExpenseServiceTest {
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(roomMapper).findRoomStatusBySlug(slug);
             verify(expenseMapper).deleteExpenseById(expenseId, roomId);
+        }
+
+        @Test
+        @DisplayName("예외: 방 소속이 아닌 사용자(비인가)가 삭제 시도 시 예외가 발생한다.")
+        void deleteExpenseThrowExceptionWhenUnauthorizedUser() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId))
+                    .willThrow(new IllegalArgumentException("해당 방에 접근 권한이 없습니다."));
+
+            // when & then
+            assertThatThrownBy(() -> expenseService.deleteExpense(slug, expenseId, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방에 접근 권한이 없습니다.");
+
+            // verify: 권한 검증 실패 시 이후 쿼리나 검증 로직이 실행되지 않아야 함
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verifyNoInteractions(roomMapper);
+            verifyNoInteractions(expenseMapper);
         }
     }
 }
