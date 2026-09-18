@@ -1,5 +1,6 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.MemberNetBalanceDto;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
 import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
@@ -51,6 +52,9 @@ public interface ExpenseMapper {
 
     /** 지출에 참여 중인 멤버 ID 목록 조회 */
     List<Long> findTargetMemberIdsByExpenseId(@Param("expenseId") Long expenseId);
+
+    /** 방 PK 기준 각 멤버별 순 상계 금액(netAmount = 결제총액 - 부담총액) 조회 */
+    List<MemberNetBalanceDto> findNetBalancesByRoomId(Long memberId);
 
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);

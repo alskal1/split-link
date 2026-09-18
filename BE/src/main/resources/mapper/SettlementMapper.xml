@@ -4,6 +4,39 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.SettlementMapper">
 
+    <!-- 계산된 정산 송금 내역 일괄 저장 (Batch Insert) -->
+    <insert id="insertSettlements" useGeneratedKeys="true" keyProperty="settlementId">
+        INSERT INTO settlements (
+            room_id,
+            sender_id,
+            receiver_id,
+            amount,
+            is_done
+        ) VALUES
+        <foreach collection="settlements" item="item" separator=",">
+            (
+                #{item.roomId},
+                #{item.senderId},
+                #{item.receiverId},
+                #{item.amount},
+                #{item.isDone}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 방 PK 기준 정산 송금 내역 조회 -->
+    <select id="findSettlementsByRoomId" resultType="com.splitlink.entity.Settlement">
+        SELECT
+            settlement_id AS settlementId,
+            room_id AS roomId,
+            sender_id AS senderId,
+            receiver_id AS receiverId,
+            amount,
+            is_done AS isDone
+        FROM settlements
+        WHERE room_id = #{roomId}
+    </select>
+
     <!-- settlements 테이블 1회 조회로 보낼 돈과 받을 돈 한 번에 가져오기 -->
     <select id="findSettlementSummary" resultType="com.splitlink.mapper.SettlementMapper$SettlementSummary">
         SELECT

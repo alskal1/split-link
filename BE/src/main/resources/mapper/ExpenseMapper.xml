@@ -4,12 +4,46 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.splitlink.mapper.ExpenseMapper">
 
-    <!-- 방 기준 지출 건수 조회 -->
-    <select id="countExpensesByRoomId" resultType="int">
-        SELECT COUNT(*)
-        FROM expenses
-        WHERE room_id = #{roomId}
-    </select>
+    <!-- 지출 내역 등록 -->
+    <insert id="insertExpense"
+            parameterType="com.splitlink.entity.Expense"
+            useGeneratedKeys="true"
+            keyProperty="expenseId"
+            keyColumn="expense_id">
+        INSERT INTO expenses(
+        room_id,
+        payer_id,
+        title,
+        amount,
+        currency,
+        fx_rate,
+        spent_at
+        ) VALUES (
+        #{roomId},
+        #{payerId},
+        #{title},
+        #{amount},
+        #{currency},
+        #{fxRate},
+        #{spentAt}
+        )
+    </insert>
+
+    <!-- 지출 분할 참여자 Bulk INSERT -->
+    <insert id="insertExpenseShares">
+        INSERT INTO expense_shares (
+        expense_id,
+        member_id,
+        amount
+        ) VALUES
+        <foreach collection="shares" item="share" separator=",">
+            (
+            #{share.expenseId},
+            #{share.memberId},
+            #{share.amount}
+            )
+        </foreach>
+    </insert>
 
     <!-- 방 전체 총 지출 합계 -->
     <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
@@ -95,46 +129,39 @@
         WHERE expense_id = #{expenseId}
     </select>
 
-    <!-- 지출 내역 등록 -->
-    <insert id="insertExpense"
-            parameterType="com.splitlink.entity.Expense"
-            useGeneratedKeys="true"
-            keyProperty="expenseId"
-            keyColumn="expense_id">
-        INSERT INTO expenses(
-            room_id,
-            payer_id,
-            title,
-            amount,
-            currency,
-            fx_rate,
-            spent_at
-        ) VALUES (
-            #{roomId},
-            #{payerId},
-            #{title},
-            #{amount},
-            #{currency},
-            #{fxRate},
-            #{spentAt}
-        )
-    </insert>
-
-    <!-- 지출 분할 참여자 Bulk INSERT -->
-    <insert id="insertExpenseShares">
-        INSERT INTO expense_shares (
-            expense_id,
-            member_id,
-            amount
-        ) VALUES
-        <foreach collection="shares" item="share" separator=",">
+    <!-- 멤버별 (결제해 준 금액 - 부담해야 할 금액) 순 상계 금액 계산 -->
+    <select id="findNetBalancesByRoomId" resultType="com.splitlink.dto.MemberNetBalanceDto">
+        SELECT
+            m.member_id AS memberId,
             (
-                #{share.expenseId},
-                #{share.memberId},
-                #{share.amount}
-            )
-        </foreach>
-    </insert>
+            IFNULL(p.total_paid, 0) - IFNULL(s.total_shared, 0)
+            ) AS netBalance
+        FROM members m
+        -- [A] 멤버별 대신 내준 금액 (Paid)
+        LEFT JOIN (
+            SELECT payer_id, SUM(amount * fx_rate) AS total_paid
+            FROM expenses
+            WHERE room_id = #{roomId}
+            GROUP BY payer_id
+        ) p ON m.member_id = p.payer_id
+        -- [B] 멤버별 부담해야 할 금액 (Shared)
+        LEFT JOIN (
+            SELECT es.member_id, SUM(es.amount) AS total_shared
+            FROM expense_shares es
+            INNER JOIN expenses e ON es.expense_id = e.expense_id
+            WHERE e.room_id = #{roomId}
+            GROUP BY es.member_id
+        ) s ON m.member_id = s.member_id
+        -- 해당 방 소속 멤버 전체 대상
+        WHERE m.room_id = #{roomId}
+    </select>
+
+    <!-- 방 기준 지출 건수 조회 -->
+    <select id="countExpensesByRoomId" resultType="int">
+        SELECT COUNT(*)
+        FROM expenses
+        WHERE room_id = #{roomId}
+    </select>
 
     <!-- 지출 메인 정보 수정 -->
     <update id="updateExpense">
