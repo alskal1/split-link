@@ -165,6 +165,48 @@ public class ExpenseControllerTest {
         }
 
         @Test
+        @DisplayName("예외: 지출 등록 시 targetMemberIds에 중복된 멤버 ID가 포함되어 있으면 400 Bad Request를 반환한다")
+        void createExpenses_ThrowExceptionWhenDuplicateTargetMemberIds() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            ExpenseBatchCreateRequest.ExpenseItemRequest duplicateItem = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("저녁 식사")
+                    .amount(new BigDecimal("10000"))
+                    .targetMemberIds(List.of(100L, 100L, 101L)) // 중복 ID 포함
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(100L)
+                    .spentAt(LocalDateTime.now())
+                    .currency("KRW")
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
+                    .items(List.of(duplicateItem))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            // when & then
+            mockMvc.perform(post("/api/rooms/{slug}/expenses", slug)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.data[0].reason").value("참여자 목록에 중복된 멤버가 존재합니다."))
+                    .andDo(print());
+        }
+
+        @Test
         @DisplayName("예외: 방 소속이 아닌 참여자 ID(IDOR)로 요청 시 400 Bad Request를 반환한다")
         void createExpensesMemberNotInRoomError() throws Exception {
             // given
@@ -549,6 +591,39 @@ public class ExpenseControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.status").value(400))
                     .andExpect(jsonPath("$.message").value("이미 정산이 완료된 방의 지출은 수정할 수 없습니다."))
+                    .andDo(print());
+        }
+
+        @Test
+        @DisplayName("예외: 지출 수정 시 targetMemberIds에 중복된 멤버 ID가 포함되어 있으면 400 Bad Request를 반환한다")
+        void updateExpense_ThrowExceptionWhenDuplicateTargetMemberIds() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expenseId = 1L;
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            ExpenseUpdateRequest request = ExpenseUpdateRequest.builder()
+                    .payerId(expectedMemberId)
+                    .title("저녁 식사")
+                    .amount(new BigDecimal("30000"))
+                    .spentAt(LocalDateTime.now())
+                    .targetMemberIds(List.of(100L, 100L, 101L)) // 중복 ID 포함
+                    .build();
+
+            // when & then
+            mockMvc.perform(put("/api/rooms/{slug}/expenses/{expenseId}", slug, expenseId)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.data[0].field").value("validTargetMemberIds"))
+                    .andExpect(jsonPath("$.data[0].reason").value("참여자 목록에 중복된 멤버가 존재합니다."))
                     .andDo(print());
         }
     }

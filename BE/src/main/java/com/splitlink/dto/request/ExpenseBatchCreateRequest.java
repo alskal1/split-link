@@ -83,5 +83,16 @@ public class ExpenseBatchCreateRequest {
         /** 함께 정산할 참여 멤버 ID 목록 */
         @NotEmpty(message = "참여자를 1명 이상 선택해 주세요.")
         private List<Long> targetMemberIds;
+
+        /**
+         * targetMemberIds 내 중복 ID 존재 여부 검증
+         */
+        @AssertTrue(message = "참여자 목록에 중복된 멤버가 존재합니다.")
+        public boolean isValidTargetMemberIds() {
+            if (targetMemberIds == null || targetMemberIds.isEmpty()) {
+                return true; // @NotEmpty에서 이미 걸러짐
+            }
+            return targetMemberIds.size() == new java.util.HashSet<>(targetMemberIds).size();
+        }
     }
 }

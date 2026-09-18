@@ -1,9 +1,6 @@
 package com.splitlink.dto.request;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 
 /**
@@ -37,4 +35,15 @@ public class ExpenseUpdateRequest {
 
     @NotEmpty(message = "참여자를 1명 이상 선택해 주세요.")
     private List<Long> targetMemberIds;
+
+    /**
+     * targetMemberIds 내 중복 ID 존재 여부 검증
+     */
+    @AssertTrue(message = "참여자 목록에 중복된 멤버가 존재합니다.")
+    public boolean isValidTargetMemberIds() {
+        if (targetMemberIds == null || targetMemberIds.isEmpty()) {
+            return true;
+        }
+        return targetMemberIds.size() == new HashSet<>(targetMemberIds).size();
+    }
 }
