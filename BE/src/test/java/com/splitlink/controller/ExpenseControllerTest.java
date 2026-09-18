@@ -25,8 +25,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -360,6 +359,60 @@ public class ExpenseControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.status").value(400))
                     .andExpect(jsonPath("$.message").value("해당 지출 내역이 존재하지 않습니다."))
+                    .andDo(print());
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /api/rooms/{slug}/expenses/{expenseId} - 지출 내역 삭제")
+    class DeleteExpense {
+
+        @Test
+        @DisplayName("성공: 정상적인 지출 삭제 요청 시 200 OK를 반환한다")
+        void deleteExpenseSuccess() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expenseId = 1L;
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            willDoNothing().given(expenseService).deleteExpense(eq(slug), eq(expenseId), eq(expectedMemberId));
+
+            // when & then
+            mockMvc.perform(delete("/api/rooms/{slug}/expenses/{expenseId}", slug, expenseId)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(200))
+                    .andExpect(jsonPath("$.message").value("SUCCESS"))
+                    .andDo(print());
+        }
+
+        @Test
+        @DisplayName("예외: 마감된 방이거나 존재하지 않는 지출 삭제 시 400 Bad Request를 반환한다")
+        void deleteExpenseBadRequestError() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long invalidExpenseId = 999L;
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            willThrow(new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다."))
+                    .given(expenseService).deleteExpense(eq(slug), eq(invalidExpenseId), eq(expectedMemberId));
+
+            // when & then
+            mockMvc.perform(delete("/api/rooms/{slug}/expenses/{expenseId}", slug, invalidExpenseId)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.message").value("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다."))
                     .andDo(print());
         }
     }
