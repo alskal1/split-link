@@ -2,14 +2,12 @@ package com.splitlink.controller;
 
 import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
+import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.service.SettlementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
@@ -33,5 +31,20 @@ public class SettlementController {
         settlementService.executeSettlement(slug, memberId);
 
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 내 정산 내역 조회
+     * (내가 보낼 돈/계좌/딥링크 목록 + 내가 받을 돈 목록 + 총액)
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<RoomMySettlementResponse>> getMySettlement(
+            @PathVariable String slug,
+            @AuthMember Long memberId) {
+        log.info(">>>> [Get My Settlement] slug: {}, memberId: {}", slug, memberId);
+
+        RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

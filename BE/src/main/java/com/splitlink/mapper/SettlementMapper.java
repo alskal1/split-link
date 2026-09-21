@@ -1,5 +1,6 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.entity.Settlement;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -19,12 +20,17 @@ public interface SettlementMapper {
     /** 계산된 정산 송금 내역 목록 다건 저장 */
     void insertSettlements(@Param("settlements") List<Settlement> settlements);
 
-    /** 방 PK 기준 정산 송금 내역 목록 조회 */
-    List<Settlement> findSettlementsByRoomId(Long roomId);
-
     /** settlements 테이블 기준 유저의 보낼 돈 / 받을 돈 요약 조회 */
     SettlementSummary findSettlementSummary(@Param("roomId") Long roomId,
                                             @Param("memberId") Long memberId);
+
+    /** memberId 별 보낼 송금 리스트 */
+    List<RoomMySettlementResponse.SendItem> findMySendSettlements(@Param("roomId") Long roomId,
+                                                                  @Param("memberId") Long memberId);
+
+    /** memberId 별 받은 송금 리스트 */
+    List<RoomMySettlementResponse.ReceiveItem> findMyReceiveSettlements(@Param("roomId") Long roomId,
+                                                                  @Param("memberId") Long memberId);
 
     /**
      * findSettlementSummary 전용 결과 매핑 클래스
