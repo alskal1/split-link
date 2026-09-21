@@ -169,6 +169,13 @@ public class ExpenseServiceTest {
 
         given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
 
+        // 방 상태가 잠기지 않고 마감되지 않은 정상 상태 반환 스텁
+        RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                .isLocked(false)
+                .isClosed(false)
+                .build();
+        given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
         // when
         expenseService.createExpenses(slug, currentMemberId, request);
 
@@ -225,6 +232,60 @@ public class ExpenseServiceTest {
         assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("해당 방에 속하지 않은 참여자가 포함되어 있습니다.");
+    }
+
+    @Test
+    @DisplayName("예외: 지출 입력이 잠긴(isLocked=true) 방에는 지출을 추가할 수 없다.")
+    void createExpensesThrowExceptionWhenRoomIsLocked() {
+        // given
+        String slug = "test-slug";
+        Long currentMemberId = 1L;
+        Long roomId = 10L;
+
+        ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                .expenseGroups(List.of())
+                .build();
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+
+        // isLocked = true 상태 반환
+        RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                .isLocked(true)
+                .isClosed(false)
+                .build();
+        given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+        // when & then
+        assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이미 지출 입력이 잠긴 방에는 지출을 추가할 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("예외: 정산이 완료(isClosed=true)된 방에는 지출을 추가할 수 없다.")
+    void createExpensesThrowExceptionWhenRoomIsClosed() {
+        // given
+        String slug = "test-slug";
+        Long currentMemberId = 1L;
+        Long roomId = 10L;
+
+        ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                .expenseGroups(List.of())
+                .build();
+
+        given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+
+        // isClosed = true 상태 반환
+        RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                .isLocked(false)
+                .isClosed(true)
+                .build();
+        given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+        // when & then
+        assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이미 정산이 완료된 방에는 지출을 추가할 수 없습니다.");
     }
 
     @Test

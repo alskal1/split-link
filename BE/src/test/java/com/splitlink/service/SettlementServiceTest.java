@@ -188,7 +188,7 @@ public class SettlementServiceTest {
             // when & then
             assertThatThrownBy(() -> settlementService.executeSettlement(slug, memberId))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("지출 입력 잠금 처리에 실패했습니다.");
+                    .hasMessage("이미 정산이 실행되었거나 마감된 방입니다.");
 
             verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
             verify(roomMapper).updateRoomLockStatus(roomId, true);
