@@ -84,6 +84,18 @@ public class ExpenseService {
         // 요청자 본인의 방 접근 권한 및 roomId 조회
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
 
+        // 방 마감 및 잠금 상태 검증 추가
+        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
+        if (status == null) {
+            throw new IllegalArgumentException("존재하지 않는 방입니다.");
+        }
+        if (status.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 완료된 방에는 지출을 추가할 수 없습니다.");
+        }
+        if (status.isLocked()) {
+            throw new IllegalArgumentException("이미 지출 입력이 잠긴 방에는 지출을 추가할 수 없습니다.");
+        }
+
         // 요청 데이터 내의 모든 payerId와 targetMemberIds 수집
         Set<Long> allRequestMemberIds = new HashSet<>();
         for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {
