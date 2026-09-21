@@ -131,6 +131,18 @@
         WHERE slug = #{slug}
     </select>
 
+    <!-- slug, memberId 기준 방 접근 권한 검증 및 상태값(roomId, isLocked, isClosed)만 조회 -->
+    <select id="findRoomBySlugAndMemberId" resultType="com.splitlink.entity.Room">
+        SELECT
+            r.room_id AS roomId,
+            r.is_locked AS isLocked,
+            r.is_closed AS isClosed
+        FROM rooms r
+        INNER JOIN members m ON r.room_id = m.room_id
+        WHERE r.slug = #{slug}
+          AND m.member_id = #{memberId}
+    </select>
+
     <!-- ================================================================= -->
     <!-- U: UPDATE (수정)                                                   -->
     <!-- ================================================================= -->
@@ -143,6 +155,15 @@
             base_currency = #{baseCurrency},
             pin = #{targetPin}
         WHERE slug = #{slug}
+    </update>
+
+    <!-- 방의 지출 입력 마감(is_locked) 상태 변경 -->
+    <update id="updateRoomLockStatus">
+        UPDATE rooms
+        SET is_locked = #{status}
+        WHERE room_id = #{roomId}
+          AND is_locked = FALSE
+          AND is_closed = FALSE
     </update>
 
     <update id="updateIsClosedBySlug">

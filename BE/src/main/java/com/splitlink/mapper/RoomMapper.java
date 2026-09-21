@@ -37,14 +37,22 @@ public interface RoomMapper {
     String findPinBySlug(String slug);
 
     /** slug, 입장코드(PIN) 검사 후 방 PK 조회 */
-    Long findRoomIdBySlugAndPin (@Param("slug") String slug,
+    Long findRoomIdBySlugAndPin(@Param("slug") String slug,
                                  @Param("pin") String pin);
+
+    /** slug, memberId 기준 방 존재 여부 및 접근 권한 검증 후 Room 엔티티 조회 */
+    Room findRoomBySlugAndMemberId(@Param("slug") String slug,
+                                   @Param("memberId") Long memberId);
 
     /** 방 기본 정보 수정 */
     int updateRoom(@Param("slug") String slug,
                    @Param("title") String title,
                    @Param("baseCurrency") String baseCurrency,
                    @Param("targetPin") String targetPin);
+
+    /** 방의 지출 입력 마감(is_locked) 상태 변경 */
+    int updateRoomLockStatus(@Param("roomId") Long roomId,
+                             @Param("status") boolean status);
 
     /** slug 기준 방 정산 완료 상태 변경 */
     int updateIsClosedBySlug(@Param("slug") String slug,

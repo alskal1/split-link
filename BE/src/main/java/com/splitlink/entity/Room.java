@@ -1,6 +1,9 @@
 package com.splitlink.entity;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -17,6 +20,7 @@ public class Room {
     private String title;
     private String baseCurrency;
     private String pin;
-    private Boolean isClosed;
+    private boolean isLocked;
+    private boolean isClosed;
     private LocalDateTime createdAt;
 }

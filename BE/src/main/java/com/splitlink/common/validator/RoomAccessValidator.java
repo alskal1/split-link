@@ -1,5 +1,6 @@
 package com.splitlink.common.validator;
 
+import com.splitlink.entity.Room;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,17 @@ public class RoomAccessValidator {
             throw new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
         }
         return roomId;
+    }
+
+    /**
+     * slug와 memberId로 방 권한을 검증하고, Room 엔티티(roomId, isLocked, isClosed 포함)를 반환
+     */
+    public Room validateAndGetRoom(String slug, Long memberId) {
+        Room room = roomMapper.findRoomBySlugAndMemberId(slug, memberId);
+        if (room == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
+        }
+        return room;
     }
 
     /**
