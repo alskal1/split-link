@@ -146,7 +146,7 @@
         ) p ON m.member_id = p.payer_id
         -- [B] 멤버별 부담해야 할 금액 (Shared)
         LEFT JOIN (
-            SELECT es.member_id, SUM(es.amount) AS total_shared
+            SELECT es.member_id, SUM(es.amount * IFNULL(e.fx_rate, 1)) AS total_shared
             FROM expense_shares es
             INNER JOIN expenses e ON es.expense_id = e.expense_id
             WHERE e.room_id = #{roomId}
