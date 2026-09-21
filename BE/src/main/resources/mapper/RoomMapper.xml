@@ -162,6 +162,8 @@
         UPDATE rooms
         SET is_locked = #{status}
         WHERE room_id = #{roomId}
+          AND is_locked = FALSE
+          AND is_closed = FALSE
     </update>
 
     <update id="updateIsClosedBySlug">

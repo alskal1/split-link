@@ -31,18 +31,16 @@ public class SettlementService {
     @Transactional
     public void executeSettlement(String slug, Long memberId) {
 
-        // 방 권한 검증 및 Room 엔티티 가져오기
+        // 방 접근 권한 및 상태 1차 검증 (안내 문구용)
         Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
-
-        // 이미 잠기거나 마감된 방인지 확인
         if (room.isLocked() || room.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방입니다.");
         }
 
-        // 지출 입력 잠금 상태(is_locked = true)로 업데이트
+        // 지출 입력 잠금 상태(is_locked = true)로 원자적 업데이트
         int updatedRows = roomMapper.updateRoomLockStatus(room.getRoomId(), true);
-        if (updatedRows == 0) {
-            throw new IllegalArgumentException("지출 입력 잠금 처리에 실패했습니다.");
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방입니다.");
         }
 
         // 최소 송금 알고리즘 수행 (지출 내역을 기반으로 Settlements 목록 생성)
