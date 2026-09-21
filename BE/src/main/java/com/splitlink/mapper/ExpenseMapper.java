@@ -54,7 +54,7 @@ public interface ExpenseMapper {
     List<Long> findTargetMemberIdsByExpenseId(@Param("expenseId") Long expenseId);
 
     /** 방 PK 기준 각 멤버별 순 상계 금액(netAmount = 결제총액 - 부담총액) 조회 */
-    List<MemberNetBalanceDto> findNetBalancesByRoomId(Long memberId);
+    List<MemberNetBalanceDto> findNetBalancesByRoomId(@Param("roomId") Long roomId);
 
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);

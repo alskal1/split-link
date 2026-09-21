@@ -5,7 +5,7 @@
 <mapper namespace="com.splitlink.mapper.SettlementMapper">
 
     <!-- 계산된 정산 송금 내역 일괄 저장 (Batch Insert) -->
-    <insert id="insertSettlements" useGeneratedKeys="true" keyProperty="settlementId">
+    <insert id="insertSettlements">
         INSERT INTO settlements (
             room_id,
             sender_id,

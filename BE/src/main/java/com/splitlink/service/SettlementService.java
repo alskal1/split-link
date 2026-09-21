@@ -12,7 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -52,21 +55,79 @@ public class SettlementService {
     }
 
     /**
-     * 최소 송금 알고리즘 계산 로직
+     * 최소 송금 알고리즘 계산 로직 (Greedy & Two-Pointer)
      */
     private List<Settlement> calculateMinimumTransfers(Long roomId) {
-        // TODO: expenses & expense_shares 데이터를 기반으로 순 상계 금액(Net Balance) 계산 후 최소 송금 목록 반환
 
-        // 1. DB에서 멤버별 순 상계 금액(netBalance) 조회
+        // DB에서 멤버별 순 상계 금액(netBalance) 조회
         List<MemberNetBalanceDto> netBalances = expenseMapper.findNetBalancesByRoomId(roomId);
 
-        // 2. 보낼 사람(음수)과 받을 사람(양수) 분리
-        // netBalance < 0 -> debtors (채무자)
-        // netBalance > 0 -> creditors (채권자)
+        if (netBalances == null || netBalances.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-        // 3. 투 포인터(그리디)로 절댓값이 큰 사람끼리 상계 처리하면서 Settlement 객체 생성
-        // senderId, receiverId, min(보낼돈, 받을돈) 짝지어주고 balance 갱신
+        // 채무자(Debtor: < 0)와 채권자(Creditor: > 0) 분리
+        List<MemberNetBalanceDto> debtors = new ArrayList<>();
+        List<MemberNetBalanceDto> creditors = new ArrayList<>();
 
-        return Collections.emptyList();
+        for (MemberNetBalanceDto netBalance : netBalances) {
+            if (netBalance.getNetBalance().compareTo(BigDecimal.ZERO) < 0) {
+                debtors.add(netBalance);
+            } else if (netBalance.getNetBalance().compareTo(BigDecimal.ZERO) > 0) {
+                creditors.add(netBalance);
+            }
+        }
+
+        // 금액 절댓값이 큰 사람부터 우선 상계하기 위해 정렬
+        // debtors: netBalance가 가장 음수인 순서 (오름차순 정렬 시 -10000, -5000...)
+        debtors.sort(Comparator.comparing(MemberNetBalanceDto::getNetBalance));
+
+        // creditors: netBalance가 가장 양수인 순서 (내림차순 정렬 시 +10000, +5000...)
+        creditors.sort((a, b) -> b.getNetBalance().compareTo(a.getNetBalance()));
+
+        List<Settlement> settlements = new ArrayList<>();
+        int debtorIdx = 0;
+        int creditorIdx = 0;
+
+        // 투 포인터 상계 처리
+        while (debtorIdx < debtors.size() && creditorIdx < creditors.size()) {
+            MemberNetBalanceDto debtor = debtors.get(debtorIdx);
+            MemberNetBalanceDto creditor = creditors.get(creditorIdx);
+
+            BigDecimal sendAmount = debtor.getNetBalance().abs(); // 보낼 돈 (절대값)
+            BigDecimal receiveAmount = creditor.getNetBalance(); // 받을 돈
+
+            // 상계할 금액 = min(sendAmount, receiveAmount)
+            BigDecimal settlementAmount = sendAmount.min(receiveAmount);
+
+            // Settlement 생성
+            Settlement settlement = Settlement.builder()
+                    .roomId(roomId)
+                    .senderId(debtor.getMemberId())
+                    .receiverId(creditor.getMemberId())
+                    .amount(settlementAmount)
+                    .build();
+
+            settlements.add(settlement);
+
+            // 잔액 갱신 (BigDecimal은 연산 후 새 객체를 반환하므로 set 해줘야함)
+            // debtor는 음수이므로 상계 금액을 더해주면 0에 가까워짐 (-30000 + 20000 = -10000)
+            debtor.setNetBalance(debtor.getNetBalance().add(settlementAmount));
+
+            // creditor는 양수이므로 상계 금액을 빼주면 0에 가까워짐 (+20000 - 20000 = 0)
+            creditor.setNetBalance(creditor.getNetBalance().subtract(settlementAmount));
+
+            // 보낼 금액(sendAmount)만큼 다 털어냈으면 다음 채무자로 이동
+            if (sendAmount.compareTo(settlementAmount) == 0) {
+                debtorIdx++;
+            }
+
+            // 받을 금액(receiveAmount)만큼 다 채웠으면 다음 채권자로 이동
+            if (receiveAmount.compareTo(settlementAmount) == 0) {
+                creditorIdx++;
+            }
+        }
+
+        return settlements;
     }
 }

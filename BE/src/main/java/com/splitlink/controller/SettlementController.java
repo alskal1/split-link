@@ -24,7 +24,7 @@ public class SettlementController {
      * (방 잠금 + 최소 송금 알고리즘 1회 계산 + DB 결과 저장)
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Void>> lockRoom(
+    public ResponseEntity<ApiResponse<Void>> executeSettlement(
             @PathVariable String slug,
             @AuthMember Long memberId) {
 
