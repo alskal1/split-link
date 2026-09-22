@@ -29,6 +29,10 @@ export default function SettlementRoomAccess() {
   const [isSubmiting, setIsSubmiting] = useState(false);
   // 인증 완료 후 받은 참여 멤버 목록
   const [members, setMembers] = useState<RoomMemberResponse[]>([]);
+  // 인증에 사용된 입장코드 (정산방 설정에서 재사용하기 위해 보관)
+  const [verifiedPin, setVerifiedPin] = useState<string | null>(null);
+  // 인증 완료 후 받은 기준통화 (정산방 설정에서 재사용하기 위해 보관)
+  const [baseCurrency, setBaseCurrency] = useState<string | null>(null);
   // 선택한 본인 멤버
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   // 방장 플로우 자동 인증 시도 완료 여부 (실패 시 수동 입력 폼으로 대체 노출)
@@ -129,6 +133,8 @@ export default function SettlementRoomAccess() {
 
       // 인증 완료 후 본인 멤버 선택 단계로 이동
       setMembers(data.members);
+      setVerifiedPin(value);
+      setBaseCurrency(data.baseCurrency);
       setStep("select-member");
     } catch (error) {
       if (!isCancelled()) {
@@ -162,7 +168,13 @@ export default function SettlementRoomAccess() {
    * 본인 멤버 선택 후 정산방 입장
    */
   const handleEnterRoom = async () => {
-    if (!slug || selectedMemberId === null || isSubmiting) {
+    if (
+      !slug ||
+      selectedMemberId === null ||
+      isSubmiting ||
+      !verifiedPin ||
+      !baseCurrency
+    ) {
       return;
     }
 
@@ -175,7 +187,7 @@ export default function SettlementRoomAccess() {
         return;
       }
 
-      saveMemberAccess(data);
+      saveMemberAccess({ ...data, pin: verifiedPin, baseCurrency });
       navigate(`/rooms/${slug}/room`, { replace: true });
     } catch (error) {
       toast.error("이미 다른 사람이 선택한 멤버예요");
@@ -209,17 +221,17 @@ export default function SettlementRoomAccess() {
                 key={member.memberId}
                 type="button"
                 className={`w-full flex items-center justify-between rounded-2xl p-4 text-left border ${
-                  member.active
+                  member.isActive
                     ? "bg-gray border-[#e6dfd9] cursor-not-allowed"
                     : isSelected
                       ? "bg-[#ffdcd4] border-[#c53829] cursor-pointer"
                       : "bg-white border-[#e6dfd9] cursor-pointer"
                 }`}
-                disabled={member.active}
+                disabled={member.isActive}
                 onClick={() => setSelectedMemberId(member.memberId)}
               >
                 <span className="font-bold">{member.name}</span>
-                {member.active ? (
+                {member.isActive ? (
                   <span className="text-[10pt] text-[#9c8f86]">참여중</span>
                 ) : (
                   <span
