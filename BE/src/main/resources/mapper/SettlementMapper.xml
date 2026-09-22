@@ -64,4 +64,13 @@
         WHERE s.room_id = #{roomId}
         AND s.receiver_id = #{memberId}
     </select>
+
+    <!-- 송금 여부 상태 변경 -->
+    <update id="updateRemittanceStatus">
+        UPDATE settlements
+        SET is_done = #{isDone}
+        WHERE settlement_id = #{settlementId}
+          AND room_id = #{roomId}
+          AND (sender_id = #{memberId} OR receiver_id = #{memberId})
+    </update>
 </mapper>

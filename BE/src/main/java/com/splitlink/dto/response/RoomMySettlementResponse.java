@@ -1,5 +1,6 @@
 package com.splitlink.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -36,6 +37,8 @@ public class RoomMySettlementResponse {
         private String bankName;
         private String accountNumber;
         private String remittanceLink; // 딥링크
+
+        @JsonProperty("isDone")
         private boolean isDone;
     }
 
@@ -51,6 +54,8 @@ public class RoomMySettlementResponse {
         private Long senderId;
         private String senderName;
         private BigDecimal amount;
+
+        @JsonProperty("isDone")
         private boolean isDone;
     }
 }

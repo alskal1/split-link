@@ -3,6 +3,7 @@ package com.splitlink.service;
 import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
+import com.splitlink.dto.request.RemittanceStatusUpdateRequest;
 import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.entity.Room;
 import com.splitlink.entity.Settlement;
@@ -318,6 +319,51 @@ public class SettlementServiceTest {
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verifyNoInteractions(settlementMapper);
             verifyNoInteractions(remittanceLinkGenerator);
+        }
+    }
+
+    @Nested
+    @DisplayName("송금 완료 상태 변경 (updateRemittanceStatus)")
+    class UpdateRemittanceStatusTest {
+
+        private final String slug = "test-room-slug";
+        private final Long roomId = 10L;
+        private final Long settlementId = 100L;
+        private final Long memberId = 1L;
+
+        @Test
+        @DisplayName("성공: 송금 완료 상태 변경 쿼리가 정상 실행되어 1개 행이 수정된다.")
+        void updateRemittanceStatusSuccess() {
+            // given
+            RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
+
+            // when
+            settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
+
+            // then
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
+        }
+
+        @Test
+        @DisplayName("예외: 존재하지 않거나 권한이 없는 정산 건 수정 시 updatedRows가 0이면 IllegalArgumentException 예외가 발생한다.")
+        void updateRemittanceStatusThrowExceptionWhenUpdatedRowsIsZero() {
+            // given
+            RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(0);
+
+            // when & then
+            assertThatThrownBy(() -> settlementService.updateRemittanceStatus(slug, settlementId, memberId, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
         }
     }
 }

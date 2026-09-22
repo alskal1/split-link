@@ -2,8 +2,10 @@ package com.splitlink.controller;
 
 import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
+import com.splitlink.dto.request.RemittanceStatusUpdateRequest;
 import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.service.SettlementService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -46,5 +48,23 @@ public class SettlementController {
         RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 개별 송금 완료 상태 변경
+     */
+    @PatchMapping("/{settlementId}")
+    public ResponseEntity<ApiResponse<Void>> updateRemittanceStatus(
+            @PathVariable String slug,
+            @PathVariable Long settlementId,
+            @AuthMember Long memberId,
+            @Valid @RequestBody RemittanceStatusUpdateRequest request) {
+
+        log.info(">>>> [Update Remittance Status] slug: {}, settlementId: {}, memberId: {}, isDone: {}",
+                slug, settlementId, memberId, request.getIsDone());
+
+        settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
+
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

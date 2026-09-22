@@ -3,6 +3,7 @@ package com.splitlink.service;
 import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
+import com.splitlink.dto.request.RemittanceStatusUpdateRequest;
 import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.entity.Room;
 import com.splitlink.entity.Settlement;
@@ -103,6 +104,34 @@ public class SettlementService {
                 .sendList(sendList)
                 .receiveList(receiveList)
                 .build();
+    }
+
+    /**
+     * 개별 송금 완료 상태 변경 (true: 완료, false: 미완료)
+     *
+     * @param slug         방 식별자 (UUID/Slug)
+     * @param settlementId 정산 내역 PK
+     * @param memberId     현재 접속/인증된 회원 PK (송금자 또는 수금자 검증용)
+     * @param request      상태 변경 요청 DTO (isDone: true/false)
+     */
+    @Transactional
+    public void updateRemittanceStatus(String slug, Long settlementId, Long memberId, RemittanceStatusUpdateRequest request) {
+
+        // 방 존재 여부 및 접근 권한 검증 -> roomId 반환
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // DB UPDATE 수행 (해당 정산 건의 송금자 OR 수금자인 경우에만 is_done 업데이트)
+        int updatedRows = settlementMapper.updateRemittanceStatus(
+                roomId,
+                settlementId,
+                memberId,
+                request.getIsDone()
+        );
+
+        // 영향받은 행이 없다면 존재하지 않거나 권한이 없는 정산 건
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
+        }
     }
 
     /**

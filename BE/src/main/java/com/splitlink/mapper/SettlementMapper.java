@@ -32,6 +32,12 @@ public interface SettlementMapper {
     List<RoomMySettlementResponse.ReceiveItem> findMyReceiveSettlements(@Param("roomId") Long roomId,
                                                                   @Param("memberId") Long memberId);
 
+    /** 송금 여부 상태 변경 */
+    int updateRemittanceStatus(@Param("roomId") Long roomId,
+                               @Param("settlementId") Long settlementId,
+                               @Param("memberId") Long memberId,
+                               @Param("isDone") boolean isDone);
+
     /**
      * findSettlementSummary 전용 결과 매핑 클래스
      */
