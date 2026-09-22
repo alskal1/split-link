@@ -1,5 +1,5 @@
 import { MEMBER_ACCESS_STORAGE_KEY } from "../constants/room";
-import type { SelectMemberResponse } from "../types/roomType";
+import type { MemberAccessStorage } from "../types/roomType";
 
 /**
  * 방(slug)별로 분리된 저장 키 생성 (여러 정산방 동시 참여 시 충돌 방지)
@@ -10,9 +10,9 @@ const getStorageKey = (slug: string): string =>
 
 /**
  * 멤버 선택(본인 지정) 완료 정보를 로컬에 저장
- * @param data 멤버 선택 응답
+ * @param data 멤버 선택 응답 + 입장코드 검증 시점에만 알 수 있는 pin/baseCurrency
  */
-export const saveMemberAccess = (data: SelectMemberResponse): void => {
+export const saveMemberAccess = (data: MemberAccessStorage): void => {
   try {
     localStorage.setItem(getStorageKey(data.slug), JSON.stringify(data));
   } catch (error) {
@@ -27,7 +27,7 @@ export const saveMemberAccess = (data: SelectMemberResponse): void => {
  */
 export const loadMemberAccess = (
   slug: string,
-): SelectMemberResponse | null => {
+): MemberAccessStorage | null => {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(getStorageKey(slug));
@@ -41,19 +41,21 @@ export const loadMemberAccess = (
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<SelectMemberResponse>;
+    const parsed = JSON.parse(raw) as Partial<MemberAccessStorage>;
 
     if (
       typeof parsed.accessToken !== "string" ||
       typeof parsed.slug !== "string" ||
       parsed.slug !== slug ||
-      typeof parsed.memberId !== "number"
+      typeof parsed.memberId !== "number" ||
+      typeof parsed.pin !== "string" ||
+      typeof parsed.baseCurrency !== "string"
     ) {
       clearMemberAccess(slug);
       return null;
     }
 
-    return parsed as SelectMemberResponse;
+    return parsed as MemberAccessStorage;
   } catch (error) {
     console.error(error);
     clearMemberAccess(slug);

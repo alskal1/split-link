@@ -81,7 +81,7 @@ export interface RoomAccessRequest {
 export interface RoomMemberResponse {
   memberId: number;
   name: string;
-  active: boolean;
+  isActive: boolean;
 }
 
 /**
@@ -118,6 +118,18 @@ export interface SelectMemberResponse {
   memberId: number;
   memberName: string;
   isActive: boolean;
+}
+
+/**
+ * 멤버 선택(본인 지정) 완료 정보 로컬 저장용 데이터
+ * 입장코드 검증 시점에만 알 수 있는 pin/baseCurrency를 함께 보관해
+ * 정산방 설정 화면에서 서버 재조회 없이 재사용한다.
+ * @param pin 입장 시 검증에 사용한 입장코드
+ * @param baseCurrency 기준통화
+ */
+export interface MemberAccessStorage extends SelectMemberResponse {
+  pin: string;
+  baseCurrency: string;
 }
 
 /**
