@@ -50,10 +50,18 @@ public class ExpenseBatchCreateRequest {
 
         /** 정산 계좌 - 은행명 */
         @NotBlank(message = "정산받을 은행명을 입력해 주세요.")
+        @Pattern(
+                regexp = "^[가-힣a-zA-Z\\s]{2,20}$",
+                message = "은행명은 2~20자의 한글 또는 영문만 입력할 수 있습니다."
+        )
         private String bankName;
 
         /** 정산 계좌 - 계좌번호 */
         @NotBlank(message = "정산받을 계좌번호를 입력해 주세요.")
+        @Pattern(
+                regexp = "^[0-9 -]*[0-9][0-9 -]*$",
+                message = "계좌번호는 숫자, 하이픈(-), 공백만 입력할 수 있으며 최소 1개 이상의 숫자가 포함되어야 합니다."
+        )
         private String accountNumber;
 
         /** 해당 그룹에 속한 세부 지출 항목 목록 */

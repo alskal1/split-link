@@ -1,7 +1,9 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
+import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.entity.Room;
 import com.splitlink.entity.Settlement;
 import com.splitlink.mapper.ExpenseMapper;
@@ -42,6 +44,9 @@ public class SettlementServiceTest {
 
     @Mock
     private RoomAccessValidator roomAccessValidator;
+
+    @Mock
+    private RemittanceLinkGenerator remittanceLinkGenerator;
 
     @Nested
     @DisplayName("정산 실행 (executeSettlement)")
@@ -194,6 +199,125 @@ public class SettlementServiceTest {
             verify(roomMapper).updateRoomLockStatus(roomId, true);
             verifyNoInteractions(expenseMapper);
             verifyNoInteractions(settlementMapper);
+        }
+    }
+
+    @Nested
+    @DisplayName("내 정산 내역 조회 (getMySettlement)")
+    class GetMySettlementTest {
+
+        private final String slug = "test-room-slug";
+        private final Long roomId = 10L;
+        private final Long memberId = 1L;
+
+        @Test
+        @DisplayName("성공: 보낼 돈과 받을 돈 목록 및 총액 요약을 정상 반환한다.")
+        void getMySettlementSuccess() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            // 1. 요약 데이터 모킹
+            SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
+                    new BigDecimal("15000"),
+                    new BigDecimal("30000")
+            );
+            given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(mockSummary);
+
+            // 2. 보낼 내역 (SendList) 모킹
+            RoomMySettlementResponse.SendItem sendItem = RoomMySettlementResponse.SendItem.builder()
+                    .settlementId(100L)
+                    .receiverId(2L)
+                    .receiverName("뚱이")
+                    .amount(new BigDecimal("15000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
+                    .remittanceLink(null)
+                    .isDone(false)
+                    .build();
+            given(settlementMapper.findMySendSettlements(roomId, memberId)).willReturn(List.of(sendItem));
+
+            // 3. 받을 내역 (ReceiveList) 모킹
+            RoomMySettlementResponse.ReceiveItem receiveItem = RoomMySettlementResponse.ReceiveItem.builder()
+                    .settlementId(101L)
+                    .senderId(3L)
+                    .senderName("징징이")
+                    .amount(new BigDecimal("30000"))
+                    .isDone(false)
+                    .build();
+            given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of(receiveItem));
+
+            // 토스 딥링크 생성 모킹
+            String expectedTossLink = "supertoss://send?bank=%EC%B9%B4%EC%B9%B4%EC%96%B4%EB%B1%8D%ED%81%AC&accountNo=333312345678&amount=15000";
+            given(remittanceLinkGenerator.generateTossLink(eq("카카오뱅크"), eq("3333-12-345678"), eq(new BigDecimal("15000"))))
+                    .willReturn(expectedTossLink);
+
+            // when
+            RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getTotalSendAmount()).isEqualByComparingTo("15000");
+            assertThat(response.getTotalReceiveAmount()).isEqualByComparingTo("30000");
+
+            // 보낼 내역 검증
+            assertThat(response.getSendList()).hasSize(1);
+            assertThat(response.getSendList().get(0).getReceiverName()).isEqualTo("뚱이");
+            assertThat(response.getSendList().get(0).getBankName()).isEqualTo("카카오뱅크");
+            assertThat(response.getSendList().get(0).getRemittanceLink()).isEqualTo(expectedTossLink);
+
+            // 받을 내역 검증
+            assertThat(response.getReceiveList()).hasSize(1);
+            assertThat(response.getReceiveList().get(0).getSenderName()).isEqualTo("징징이");
+
+            // 호출 검증
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(settlementMapper).findSettlementSummary(roomId, memberId);
+            verify(settlementMapper).findMySendSettlements(roomId, memberId);
+            verify(settlementMapper).findMyReceiveSettlements(roomId, memberId);
+            verify(remittanceLinkGenerator).generateTossLink("카카오뱅크", "3333-12-345678", new BigDecimal("15000"));
+        }
+
+        @Test
+        @DisplayName("성공: 보낼 돈이나 받을 돈이 없는 경우 빈 리스트와 0원을 반환한다.")
+        void getMySettlementSuccessWithEmptyList() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
+                    BigDecimal.ZERO, BigDecimal.ZERO
+            );
+            given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(mockSummary);
+            given(settlementMapper.findMySendSettlements(roomId, memberId)).willReturn(List.of());
+            given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of());
+
+            // when
+            RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getTotalSendAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.getTotalReceiveAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.getSendList()).isEmpty();
+            assertThat(response.getReceiveList()).isEmpty();
+
+            verify(remittanceLinkGenerator, never()).generateTossLink(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("예외: 권한이 없거나 존재하지 않는 방인 경우 IllegalArgumentException 예외가 발생한다.")
+        void getMySettlementThrowExceptionWhenUnauthorizedOrNotFound() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId))
+                    .willThrow(new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다."));
+
+            // when & then
+            assertThatThrownBy(() -> settlementService.getMySettlement(slug, memberId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
+
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verifyNoInteractions(settlementMapper);
+            verifyNoInteractions(remittanceLinkGenerator);
         }
     }
 }

@@ -24,19 +24,6 @@
         </foreach>
     </insert>
 
-    <!-- 방 PK 기준 정산 송금 내역 조회 -->
-    <select id="findSettlementsByRoomId" resultType="com.splitlink.entity.Settlement">
-        SELECT
-            settlement_id AS settlementId,
-            room_id AS roomId,
-            sender_id AS senderId,
-            receiver_id AS receiverId,
-            amount,
-            is_done AS isDone
-        FROM settlements
-        WHERE room_id = #{roomId}
-    </select>
-
     <!-- settlements 테이블 1회 조회로 보낼 돈과 받을 돈 한 번에 가져오기 -->
     <select id="findSettlementSummary" resultType="com.splitlink.mapper.SettlementMapper$SettlementSummary">
         SELECT
@@ -45,5 +32,36 @@
         FROM settlements
         WHERE room_id = #{roomId}
             AND (sender_id = #{memberId} OR receiver_id = #{memberId})
+    </select>
+
+
+    <!-- memberId 별 보낼 송금 리스트 (결제자 이름 및 계좌 정보 조인) -->
+    <select id="findMySendSettlements" resultType="com.splitlink.dto.response.RoomMySettlementResponse$SendItem">
+        SELECT
+            s.settlement_id AS settlementId,
+            s.receiver_id AS receiverId,
+            m.name AS receiverName,
+            s.amount AS amount,
+            m.bank_name AS bankName,
+            m.account_number AS accountNumber,
+            s.is_done AS isDone
+        FROM settlements s
+        JOIN members m ON s.receiver_id = m.member_id
+        WHERE s.room_id = #{roomId}
+          AND s.sender_id = #{memberId}
+    </select>
+
+    <!-- memberId 별 받을 송금 리스트 (송금자 이름 조인) -->
+    <select id="findMyReceiveSettlements" resultType="com.splitlink.dto.response.RoomMySettlementResponse$ReceiveItem">
+        SELECT
+        s.settlement_id AS settlementId,
+        s.sender_id AS senderId,
+        m.name AS senderName,
+        s.amount AS amount,
+        s.is_done AS isDone
+        FROM settlements s
+        JOIN members m ON s.sender_id = m.member_id
+        WHERE s.room_id = #{roomId}
+        AND s.receiver_id = #{memberId}
     </select>
 </mapper>

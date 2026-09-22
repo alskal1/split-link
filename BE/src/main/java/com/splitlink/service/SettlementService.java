@@ -1,7 +1,9 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
+import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.entity.Room;
 import com.splitlink.entity.Settlement;
 import com.splitlink.mapper.ExpenseMapper;
@@ -18,6 +20,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * 정산 및 최소 송금 계산 비즈니스 로직을 처리하는 서비스
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,7 +32,14 @@ public class SettlementService {
     private final SettlementMapper settlementMapper;
     private final ExpenseMapper expenseMapper;
     private final RoomAccessValidator roomAccessValidator;
+    private final RemittanceLinkGenerator remittanceLinkGenerator; // 송금 딥링크 유틸리티
 
+    /**
+     * 정산 실행 (방 잠금 + 최소 송금 알고리즘 계산 + 정산 내역 일괄 저장)
+     *
+     * @param slug     방 식별자 (UUID/Slug)
+     * @param memberId 현재 JWT 인증된 회원 PK (요청자 검증용)
+     */
     @Transactional
     public void executeSettlement(String slug, Long memberId) {
 
@@ -50,6 +62,47 @@ public class SettlementService {
         if (calculatedSettlements != null && !calculatedSettlements.isEmpty()) {
             settlementMapper.insertSettlements(calculatedSettlements);
         }
+    }
+
+    /**
+     * 내 정산 내역 조회 (보낼 돈, 받을 돈, 요약 금액 및 송금 리스트)
+     *
+     * @param slug     방 식별자 (UUID/Slug)
+     * @param memberId 현재 접속한 회원 PK
+     * @return 내 정산 내역 응답 DTO
+     */
+    @Transactional(readOnly = true)
+    public RoomMySettlementResponse getMySettlement(String slug, Long memberId) {
+
+        // 방 존재 여부 및 접근 권한 검증 -> roomId 반환
+        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+
+        // 총 보낼 금액 / 받을 금액 요약 조회
+        SettlementMapper.SettlementSummary summary = settlementMapper.findSettlementSummary(roomId, memberId);
+
+        // 보낼 송금 리스트 및 받은 송금 리스트 조회
+        List<RoomMySettlementResponse.SendItem> sendList = settlementMapper.findMySendSettlements(roomId, memberId);
+        List<RoomMySettlementResponse.ReceiveItem> receiveList = settlementMapper.findMyReceiveSettlements(roomId, memberId);
+
+        // SendItem 내 토스 송금 딥링크(remittanceLink) 가공 세팅
+        if (sendList != null && !sendList.isEmpty()) {
+            sendList.forEach(item -> {
+                String link = remittanceLinkGenerator.generateTossLink(
+                        item.getBankName(),
+                        item.getAccountNumber(),
+                        item.getAmount()
+                );
+                item.setRemittanceLink(link);
+            });
+        }
+
+        // 응답 DTO 조립
+        return RoomMySettlementResponse.builder()
+                .totalSendAmount(summary != null ? summary.getTotalSendAmount() : BigDecimal.ZERO)
+                .totalReceiveAmount(summary != null ? summary.getTotalReceiveAmount() : BigDecimal.ZERO)
+                .sendList(sendList)
+                .receiveList(receiveList)
+                .build();
     }
 
     /**

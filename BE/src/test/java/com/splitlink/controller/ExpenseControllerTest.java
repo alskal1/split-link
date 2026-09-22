@@ -249,6 +249,88 @@ public class ExpenseControllerTest {
                     .andExpect(status().isBadRequest())
                     .andDo(print());
         }
+
+        @Test
+        @DisplayName("예외: 은행명에 특수문자나 숫자가 포함되는 등 유효하지 않은 포맷이면 400 Bad Request를 반환한다")
+        void createExpenses_InvalidBankName_Returns400() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("저녁 식사")
+                    .amount(new BigDecimal("10000"))
+                    .targetMemberIds(List.of(100L, 101L))
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(100L)
+                    .spentAt(LocalDateTime.now())
+                    .currency("KRW")
+                    .bankName("카카오123!") // 잘못된 은행명 포맷
+                    .accountNumber("3333-12-345678")
+                    .items(List.of(item))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            // when & then
+            mockMvc.perform(post("/api/rooms/{slug}/expenses", slug)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andDo(print());
+        }
+
+        @Test
+        @DisplayName("예외: 계좌번호에 숫자가 전혀 없으면 400 Bad Request를 반환한다")
+        void createExpenses_NoDigitsInAccountNumber_Returns400() throws Exception {
+            // given
+            String mockToken = "mock.jwt.token";
+            String slug = "test-slug";
+            Long expectedMemberId = 100L;
+
+            given(jwtProvider.validateToken(mockToken)).willReturn(true);
+            given(jwtProvider.getMemberId(mockToken)).willReturn(expectedMemberId);
+
+            ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("저녁 식사")
+                    .amount(new BigDecimal("10000"))
+                    .targetMemberIds(List.of(100L, 101L))
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(100L)
+                    .spentAt(LocalDateTime.now())
+                    .currency("KRW")
+                    .bankName("카카오뱅크")
+                    .accountNumber("문의요망") // 숫자가 없는 계좌번호
+                    .items(List.of(item))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            // when & then
+            mockMvc.perform(post("/api/rooms/{slug}/expenses", slug)
+                            .header("Authorization", "Bearer " + mockToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andDo(print());
+        }
     }
 
     @Nested
