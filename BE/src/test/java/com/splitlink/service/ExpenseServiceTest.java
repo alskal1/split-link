@@ -195,6 +195,8 @@ public class ExpenseServiceTest {
             assertThat(shares.get(0).getAmount()).isEqualTo(new BigDecimal("3334"));
             assertThat(shares.get(1).getAmount()).isEqualTo(new BigDecimal("3333"));
             assertThat(shares.get(2).getAmount()).isEqualTo(new BigDecimal("3333"));
+
+            verify(memberMapper).updateAccountInfo(1L, "카카오뱅크", "3333-12-345678");
         }
 
         @Test
