@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
 import com.splitlink.dto.response.RoomMySettlementResponse;
@@ -31,6 +32,7 @@ public class SettlementService {
     private final SettlementMapper settlementMapper;
     private final ExpenseMapper expenseMapper;
     private final RoomAccessValidator roomAccessValidator;
+    private final RemittanceLinkGenerator remittanceLinkGenerator; // 송금 딥링크 유틸리티
 
     /**
      * 정산 실행 (방 잠금 + 최소 송금 알고리즘 계산 + 정산 내역 일괄 저장)
@@ -82,8 +84,17 @@ public class SettlementService {
         List<RoomMySettlementResponse.SendItem> sendList = settlementMapper.findMySendSettlements(roomId, memberId);
         List<RoomMySettlementResponse.ReceiveItem> receiveList = settlementMapper.findMyReceiveSettlements(roomId, memberId);
 
-        // TODO: [딥링크] SendItem 내 송금 딥링크(remittanceLink) 가공 로직 연동 예정
-        // sendList.forEach(item -> item.setRemittanceLink(generateLink(item)));
+        // SendItem 내 토스 송금 딥링크(remittanceLink) 가공 세팅
+        if (sendList != null && !sendList.isEmpty()) {
+            sendList.forEach(item -> {
+                String link = remittanceLinkGenerator.generateTossLink(
+                        item.getBankName(),
+                        item.getAccountNumber(),
+                        item.getAmount()
+                );
+                item.setRemittanceLink(link);
+            });
+        }
 
         // 응답 DTO 조립
         return RoomMySettlementResponse.builder()

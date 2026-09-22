@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
 import com.splitlink.dto.response.RoomMySettlementResponse;
@@ -43,6 +44,9 @@ public class SettlementServiceTest {
 
     @Mock
     private RoomAccessValidator roomAccessValidator;
+
+    @Mock
+    private RemittanceLinkGenerator remittanceLinkGenerator;
 
     @Nested
     @DisplayName("정산 실행 (executeSettlement)")
@@ -242,6 +246,11 @@ public class SettlementServiceTest {
                     .build();
             given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of(receiveItem));
 
+            // 토스 딥링크 생성 모킹
+            String expectedTossLink = "supertoss://send?bank=%EC%B9%B4%EC%B9%B4%EC%96%B4%EB%B1%8D%ED%81%AC&accountNo=333312345678&amount=15000";
+            given(remittanceLinkGenerator.generateTossLink(eq("카카오뱅크"), eq("3333-12-345678"), eq(new BigDecimal("15000"))))
+                    .willReturn(expectedTossLink);
+
             // when
             RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
 
@@ -254,7 +263,7 @@ public class SettlementServiceTest {
             assertThat(response.getSendList()).hasSize(1);
             assertThat(response.getSendList().get(0).getReceiverName()).isEqualTo("뚱이");
             assertThat(response.getSendList().get(0).getBankName()).isEqualTo("카카오뱅크");
-            assertThat(response.getSendList().get(0).getRemittanceLink()).isNull();
+            assertThat(response.getSendList().get(0).getRemittanceLink()).isEqualTo(expectedTossLink);
 
             // 받을 내역 검증
             assertThat(response.getReceiveList()).hasSize(1);
@@ -265,6 +274,7 @@ public class SettlementServiceTest {
             verify(settlementMapper).findSettlementSummary(roomId, memberId);
             verify(settlementMapper).findMySendSettlements(roomId, memberId);
             verify(settlementMapper).findMyReceiveSettlements(roomId, memberId);
+            verify(remittanceLinkGenerator).generateTossLink("카카오뱅크", "3333-12-345678", new BigDecimal("15000"));
         }
 
         @Test
@@ -289,6 +299,8 @@ public class SettlementServiceTest {
             assertThat(response.getTotalReceiveAmount()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(response.getSendList()).isEmpty();
             assertThat(response.getReceiveList()).isEmpty();
+
+            verify(remittanceLinkGenerator, never()).generateTossLink(any(), any(), any());
         }
 
         @Test
@@ -305,6 +317,7 @@ public class SettlementServiceTest {
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verifyNoInteractions(settlementMapper);
+            verifyNoInteractions(remittanceLinkGenerator);
         }
     }
 }

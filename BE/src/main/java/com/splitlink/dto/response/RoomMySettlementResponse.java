@@ -1,9 +1,6 @@
 package com.splitlink.dto.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,6 +24,7 @@ public class RoomMySettlementResponse {
      * 내가 돈을 보내야 하는 대상 정보 (Debtor -> Creditor)
      */
     @Getter
+    @Setter
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
