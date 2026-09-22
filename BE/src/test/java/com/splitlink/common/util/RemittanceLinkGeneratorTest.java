@@ -49,7 +49,7 @@ class RemittanceLinkGeneratorTest {
     @DisplayName("성공: 계좌번호에 공백이나 특수문자가 포함되어 있어도 숫자만 추출하여 딥링크를 생성한다.")
     void generateTossLink_CleanAccountNumber_Success() {
         // given
-        String bankName = "KB국민은행";
+        String bankName = "토스뱅크";
         String accountNumber = "123 - 456 - 789 012";
         BigDecimal amount = new BigDecimal("50000");
 
@@ -58,6 +58,24 @@ class RemittanceLinkGeneratorTest {
 
         // then
         assertThat(result).contains("accountNo=123456789012");
+    }
+
+    @Test
+    @DisplayName("성공: '~은행'으로 끝나는 은행명은 '은행'이 제거되고 URL 인코딩되어 적용된다.")
+    void generateTossLink_NormalizeBankName_Success() {
+        // given
+        String bankName = "KB국민은행";
+        String accountNumber = "123456789012";
+        BigDecimal amount = new BigDecimal("50000");
+
+        // "KB국민"으로 정제 후 인코딩
+        String expectedEncodedBank = URLEncoder.encode("KB국민", StandardCharsets.UTF_8);
+
+        // when
+        String result = remittanceLinkGenerator.generateTossLink(bankName, accountNumber, amount);
+
+        // then
+        assertThat(result).contains("bank=" + expectedEncodedBank);
     }
 
     @ParameterizedTest
@@ -79,6 +97,17 @@ class RemittanceLinkGeneratorTest {
     void generateTossLink_BlankAccountNumber_ReturnsNull(String accountNumber) {
         // when
         String result = remittanceLinkGenerator.generateTossLink("신한은행", accountNumber, new BigDecimal("10000"));
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"문의요망", "해외계좌", "ABC-DEF", "  --  "})
+    @DisplayName("예외/경계: 계좌번호에 숫자가 전혀 포함되어 있지 않은 경우 null을 반환한다.")
+    void generateTossLink_NoDigitsInAccountNumber_ReturnsNull(String accountNumber) {
+        // when
+        String result = remittanceLinkGenerator.generateTossLink("카카오뱅크", accountNumber, new BigDecimal("10000"));
 
         // then
         assertThat(result).isNull();

@@ -28,11 +28,16 @@ public class RemittanceLinkGenerator {
             return null;
         }
 
-        // 은행명 전처리: "국민은행" -> "국민" 등 토스 매핑용 키워드로 정제
-        String normalizedBank = normalizeBankName(bankName);
-
         // 계좌번호에서 하이픈(-) 및 공백 제거 (숫자만 남김)
         String cleanAccount = accountNumber.replaceAll("[^0-9]", "");
+
+        // 숫자가 하나도 없는 계좌번호(예: "문의요망", "해외계좌" 등) 입력 시 null 반환
+        if (!StringUtils.hasText(cleanAccount)) {
+            return null;
+        }
+
+        // 은행명 전처리: "국민은행" -> "국민" 등 토스 매핑용 키워드로 정제
+        String normalizedBank = normalizeBankName(bankName);
 
         try {
             // 정제된 은행명 URL 인코딩 처리
