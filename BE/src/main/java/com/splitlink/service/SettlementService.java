@@ -132,6 +132,13 @@ public class SettlementService {
         if (updatedRows != 1) {
             throw new IllegalArgumentException("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
         }
+
+        // 남은 미완료 송금 건수 조회 (is_done = false 건수)
+        int remainSettlementsCount = settlementMapper.countRemainSettlements(roomId);
+
+        // 남은 건수가 0개이면 isClosed = true, 1개 이상이면 isClosed = false
+        boolean isClosed = (remainSettlementsCount == 0);
+        roomMapper.updateIsClosedByRoomId(roomId, isClosed);
     }
 
     /**

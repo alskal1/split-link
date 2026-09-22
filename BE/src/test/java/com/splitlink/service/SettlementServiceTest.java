@@ -332,13 +332,15 @@ public class SettlementServiceTest {
         private final Long memberId = 1L;
 
         @Test
-        @DisplayName("성공: 송금 완료 상태 변경 쿼리가 정상 실행되어 1개 행이 수정된다.")
-        void updateRemittanceStatusSuccess() {
+        @DisplayName("성공: 남은 미완료 송금이 존재할 때(remainCount > 0) isClosed = false 로 업데이트된다.")
+        void updateRemittanceStatusSuccessWithRemainSettlements() {
             // given
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
+            given(settlementMapper.countRemainSettlements(roomId)).willReturn(2); // 미완료 2건 남음
+            given(roomMapper.updateIsClosedByRoomId(roomId, false)).willReturn(1);
 
             // when
             settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
@@ -346,6 +348,29 @@ public class SettlementServiceTest {
             // then
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
+            verify(settlementMapper).countRemainSettlements(roomId);
+            verify(roomMapper).updateIsClosedByRoomId(roomId, false);
+        }
+
+        @Test
+        @DisplayName("성공: 모든 송금이 완료되었을 때(remainCount == 0) isClosed = true 로 업데이트된다.")
+        void updateRemittanceStatusSuccessWithAllCompleted() {
+            // given
+            RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
+            given(settlementMapper.countRemainSettlements(roomId)).willReturn(0); // 미완료 0건 (모두 완료)
+            given(roomMapper.updateIsClosedByRoomId(roomId, true)).willReturn(1);
+
+            // when
+            settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
+
+            // then
+            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
+            verify(settlementMapper).countRemainSettlements(roomId);
+            verify(roomMapper).updateIsClosedByRoomId(roomId, true);
         }
 
         @Test
@@ -364,6 +389,8 @@ public class SettlementServiceTest {
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
+            verify(settlementMapper, never()).countRemainSettlements(anyLong());
+            verify(roomMapper, never()).updateIsClosedByRoomId(anyLong(), anyBoolean());
         }
     }
 }

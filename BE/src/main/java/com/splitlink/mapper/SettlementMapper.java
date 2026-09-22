@@ -32,6 +32,9 @@ public interface SettlementMapper {
     List<RoomMySettlementResponse.ReceiveItem> findMyReceiveSettlements(@Param("roomId") Long roomId,
                                                                   @Param("memberId") Long memberId);
 
+    /** 해당 방의 미완료된 송금 건수 */
+    int countRemainSettlements(@Param("roomId") Long roomId);
+
     /** 송금 여부 상태 변경 */
     int updateRemittanceStatus(@Param("roomId") Long roomId,
                                @Param("settlementId") Long settlementId,

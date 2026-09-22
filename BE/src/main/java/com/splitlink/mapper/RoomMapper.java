@@ -55,8 +55,8 @@ public interface RoomMapper {
                              @Param("status") boolean status);
 
     /** slug 기준 방 정산 완료 상태 변경 */
-    int updateIsClosedBySlug(@Param("slug") String slug,
-                             @Param("isClosed") Boolean isClosed);
+    int updateIsClosedByRoomId(@Param("roomId") Long roomId,
+                             @Param("isClosed") boolean isClosed);
 
     /** slug 기준 방 정산 완료 여부 조회 */
     Boolean findIsClosedBySlug(String slug);

@@ -166,10 +166,11 @@
           AND is_closed = FALSE
     </update>
 
-    <update id="updateIsClosedBySlug">
+    <!-- roomId 기준 방 정산 완료 상태 변경 -->
+    <update id="updateIsClosedByRoomId">
         UPDATE rooms
         SET is_closed = #{isClosed}
-        WHERE slug = #{slug}
+        WHERE room_id = #{roomId}
     </update>
     <!-- ================================================================= -->
     <!-- D: DELETE (삭제)                                                   -->
