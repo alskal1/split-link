@@ -1,6 +1,8 @@
+import { BANK_OPTIONS } from "../constants/bank";
 import { CURRENCY_OPTIONS } from "../constants/currency";
 import { createEmptyExpenseItem } from "../utils/expenseForm";
 import type {
+  ExpenseFormMemberInfo,
   ExpenseGroupFormValue,
   ExpenseItemFormValue,
 } from "../types/expenseType";
@@ -12,7 +14,7 @@ import xIcon from "../assets/x-gray.svg";
 interface ExpenseFormProps {
   index: number;
   group: ExpenseGroupFormValue;
-  members: string[];
+  members: ExpenseFormMemberInfo[];
   onChange: (group: ExpenseGroupFormValue) => void;
   onRemove?: () => void;
 }
@@ -90,10 +92,19 @@ export default function ExpenseForm({
 
         <div className="flex flex-col space-y-1">
           <label className="text-[10pt] text-[#281c18]">결제자</label>
-          <Input
-            placeholder="결제자 이름"
-            value={group.payer}
-            onChange={(e) => onChange({ ...group, payer: e.target.value })}
+          <Select
+            height="44px"
+            options={[
+              { label: "결제자 선택", value: "" },
+              ...members.map((member) => ({
+                label: member.name,
+                value: String(member.memberId),
+              })),
+            ]}
+            option={group.payer !== null ? String(group.payer) : ""}
+            onChange={(value) =>
+              onChange({ ...group, payer: value ? Number(value) : null })
+            }
           />
         </div>
 
@@ -130,11 +141,15 @@ export default function ExpenseForm({
         <div className="flex flex-col space-y-1">
           <label className="text-[10pt] text-[#281c18]">송금받을 계좌</label>
           <div className="flex items-center space-x-2">
-            <Input
+            <Select
               className="flex-1"
-              placeholder="은행명"
-              value={group.bankName}
-              onChange={(e) => onChange({ ...group, bankName: e.target.value })}
+              height="44px"
+              options={[
+                { label: "은행 선택", value: "" },
+                ...BANK_OPTIONS,
+              ]}
+              option={group.bankName}
+              onChange={(value) => onChange({ ...group, bankName: value })}
             />
             <Input
               className="flex-1"
