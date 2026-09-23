@@ -81,7 +81,9 @@ export default function ExpenseDetail({
     title.trim().length > 0 &&
     Number(amount) > 0 &&
     payerId.length > 0 &&
-    targetMemberIds.length > 0;
+    targetMemberIds.length > 0 &&
+    bankName.length > 0 &&
+    accountNumber.trim().length > 0;
 
   /**
    * 참여자 선택 토글
