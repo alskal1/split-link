@@ -120,6 +120,9 @@ public class SettlementService {
         // 방 존재 여부 및 접근 권한 검증 -> roomId 반환
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
 
+        // 동시성 제어를 위한 방 단위 비관적 락(줄서기) 획득
+        roomMapper.findRoomByIdForUpdate(roomId);
+
         // DB UPDATE 수행 (해당 정산 건의 송금자 OR 수금자인 경우에만 is_done 업데이트)
         int updatedRows = settlementMapper.updateRemittanceStatus(
                 roomId,

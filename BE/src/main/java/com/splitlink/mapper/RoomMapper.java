@@ -44,6 +44,9 @@ public interface RoomMapper {
     Room findRoomBySlugAndMemberId(@Param("slug") String slug,
                                    @Param("memberId") Long memberId);
 
+    /** 방 단위 비관적 락(줄서기) 조회 */
+    Room findRoomByIdForUpdate(@Param("roomId") Long roomId);
+
     /** 방 기본 정보 수정 */
     int updateRoom(@Param("slug") String slug,
                    @Param("title") String title,

@@ -71,6 +71,7 @@
         FROM settlements
         WHERE room_id = #{roomId}
           AND is_done = false
+        FOR UPDATE
     </select>
 
     <!-- 송금 여부 상태 변경 -->

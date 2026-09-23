@@ -338,6 +338,7 @@ public class SettlementServiceTest {
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
             given(settlementMapper.countRemainSettlements(roomId)).willReturn(2); // 미완료 2건 남음
             given(roomMapper.updateIsClosedByRoomId(roomId, false)).willReturn(1);
@@ -347,6 +348,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper).countRemainSettlements(roomId);
             verify(roomMapper).updateIsClosedByRoomId(roomId, false);
@@ -359,6 +361,7 @@ public class SettlementServiceTest {
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
             given(settlementMapper.countRemainSettlements(roomId)).willReturn(0); // 미완료 0건 (모두 완료)
             given(roomMapper.updateIsClosedByRoomId(roomId, true)).willReturn(1);
@@ -368,6 +371,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper).countRemainSettlements(roomId);
             verify(roomMapper).updateIsClosedByRoomId(roomId, true);
@@ -380,6 +384,7 @@ public class SettlementServiceTest {
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(0);
 
             // when & then
@@ -388,6 +393,7 @@ public class SettlementServiceTest {
                     .hasMessage("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper, never()).countRemainSettlements(anyLong());
             verify(roomMapper, never()).updateIsClosedByRoomId(anyLong(), anyBoolean());
