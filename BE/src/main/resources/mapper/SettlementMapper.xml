@@ -64,4 +64,22 @@
         WHERE s.room_id = #{roomId}
         AND s.receiver_id = #{memberId}
     </select>
+
+    <!-- 해당 방의 미완료된 송금 건수 -->
+    <select id="countRemainSettlements" resultType="int">
+        SELECT count(*)
+        FROM settlements
+        WHERE room_id = #{roomId}
+          AND is_done = false
+        FOR UPDATE
+    </select>
+
+    <!-- 송금 여부 상태 변경 -->
+    <update id="updateRemittanceStatus">
+        UPDATE settlements
+        SET is_done = #{isDone}
+        WHERE settlement_id = #{settlementId}
+          AND room_id = #{roomId}
+          AND (sender_id = #{memberId} OR receiver_id = #{memberId})
+    </update>
 </mapper>

@@ -143,6 +143,14 @@
           AND m.member_id = #{memberId}
     </select>
 
+    <!-- 방 단위 비관적 락(줄서기) 조회 -->
+    <select id="findRoomByIdForUpdate" resultType="com.splitlink.entity.Room">
+        SELECT room_id, is_locked, is_closed
+        FROM rooms
+        WHERE room_id = #{roomId}
+        FOR UPDATE
+    </select>
+
     <!-- ================================================================= -->
     <!-- U: UPDATE (수정)                                                   -->
     <!-- ================================================================= -->
@@ -166,11 +174,13 @@
           AND is_closed = FALSE
     </update>
 
-    <update id="updateIsClosedBySlug">
+    <!-- roomId 기준 방 정산 완료 상태 변경 -->
+    <update id="updateIsClosedByRoomId">
         UPDATE rooms
         SET is_closed = #{isClosed}
-        WHERE slug = #{slug}
+        WHERE room_id = #{roomId}
     </update>
+
     <!-- ================================================================= -->
     <!-- D: DELETE (삭제)                                                   -->
     <!-- ================================================================= -->

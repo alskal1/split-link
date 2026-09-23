@@ -44,6 +44,9 @@ public interface RoomMapper {
     Room findRoomBySlugAndMemberId(@Param("slug") String slug,
                                    @Param("memberId") Long memberId);
 
+    /** 방 단위 비관적 락(줄서기) 조회 */
+    Room findRoomByIdForUpdate(@Param("roomId") Long roomId);
+
     /** 방 기본 정보 수정 */
     int updateRoom(@Param("slug") String slug,
                    @Param("title") String title,
@@ -55,8 +58,8 @@ public interface RoomMapper {
                              @Param("status") boolean status);
 
     /** slug 기준 방 정산 완료 상태 변경 */
-    int updateIsClosedBySlug(@Param("slug") String slug,
-                             @Param("isClosed") Boolean isClosed);
+    int updateIsClosedByRoomId(@Param("roomId") Long roomId,
+                             @Param("isClosed") boolean isClosed);
 
     /** slug 기준 방 정산 완료 여부 조회 */
     Boolean findIsClosedBySlug(String slug);
