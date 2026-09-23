@@ -153,10 +153,8 @@ function SettlementRoomContent({
   // 정산 요약(보낼 금액) 모달 오픈 여부
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
-  // 지출 입력 폼 (결제자 · 날짜 그룹 목록)
-  const [groups, setGroups] = useState<ExpenseGroupFormValue[]>([
-    createEmptyExpenseGroup(members),
-  ]);
+  // 지출 입력 폼 (결제자 · 날짜 그룹 목록) - formInit 로드 후 초기화
+  const [groups, setGroups] = useState<ExpenseGroupFormValue[]>([]);
   // 등록 완료된 지출 (결제내역 리스트 / 정산 요약 계산용)
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   // 등록 진행 여부
@@ -180,9 +178,18 @@ function SettlementRoomContent({
     }
     setExpenseSummary(summary);
 
-    const details = await Promise.all(
+    // 조회 도중 다른 사용자가 삭제한 항목이 있어도(reject) 나머지 항목으로 계속 진행
+    const results = await Promise.allSettled(
       summary.expenses.map((item) => getExpenseDetail(slug, item.expenseId)),
     );
+    const details = results
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<ExpenseDetailResponse | undefined> =>
+          result.status === "fulfilled",
+      )
+      .map((result) => result.value);
 
     const records: ExpenseRecord[] = details
       .filter((detail): detail is ExpenseDetailResponse => !!detail)
@@ -205,17 +212,21 @@ function SettlementRoomContent({
     setExpenses(records);
   }, [slug]);
 
+  /**
+   * 지출 입력 폼 초기 데이터(결제자/참여자 선택용 멤버 목록 등) 새로 조회해 반영
+   * (멤버 추가/이름 변경 등 방 설정 저장 직후에도 호출하여 formInit이 최신 멤버 목록을 갖도록 함)
+   */
+  const loadFormInit = useCallback(async () => {
+    const init = await getExpenseFormInit(slug);
+    if (init) {
+      setFormInit(init);
+    }
+  }, [slug]);
+
   useEffect(() => {
     (async () => {
       try {
-        const [init] = await Promise.all([
-          getExpenseFormInit(slug),
-          loadExpenses(),
-        ]);
-
-        if (init) {
-          setFormInit(init);
-        }
+        await Promise.all([loadFormInit(), loadExpenses()]);
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -224,7 +235,22 @@ function SettlementRoomContent({
         );
       }
     })();
-  }, [slug, loadExpenses]);
+  }, [slug, loadFormInit, loadExpenses]);
+
+  // 지출 입력 폼 결제자/참여자 선택용 멤버 목록 (formInit 로드 전에는 빈 배열)
+  const formMembers = formInit?.roomMembers ?? [];
+
+  // formInit 로드 완료 시 초기 그룹 1개 생성 (이미 그룹이 있으면 건너뜀)
+  useEffect(() => {
+    if (!formInit) {
+      return;
+    }
+    setGroups((prev) =>
+      prev.length === 0
+        ? [createEmptyExpenseGroup(formInit.roomMembers)]
+        : prev,
+    );
+  }, [formInit]);
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
 
@@ -304,21 +330,23 @@ function SettlementRoomContent({
    * 그룹 추가
    */
   const handleAddGroup = () => {
-    setGroups((prev) => [...prev, createEmptyExpenseGroup(members)]);
+    setGroups((prev) => [...prev, createEmptyExpenseGroup(formMembers)]);
   };
 
   /**
    * 입력 폼 초기화
    */
   const handleReset = () => {
-    setGroups([createEmptyExpenseGroup(members)]);
+    setGroups([createEmptyExpenseGroup(formMembers)]);
   };
 
   // 유효성 체크
   const isValid = groups.every(
     (group) =>
-      group.payer.trim().length > 0 &&
+      group.payer !== null &&
       group.paidAt.length > 0 &&
+      group.bankName.length > 0 &&
+      group.accountNumber.trim().length > 0 &&
       group.items.every(
         (item) =>
           item.name.trim().length > 0 &&
@@ -338,18 +366,13 @@ function SettlementRoomContent({
     setIsSubmiting(true);
 
     try {
-      const memberIdByName = new Map(
-        formInit.roomMembers.map((member) => [member.name, member.memberId]),
-      );
-
       const expenseGroups = groups.map((group) => {
-        const payerId = memberIdByName.get(group.payer);
-        if (!payerId) {
-          throw new Error(`${group.payer}의 멤버 정보를 찾을 수 없어요`);
+        if (group.payer === null) {
+          throw new Error("결제자 정보를 찾을 수 없어요");
         }
 
         return {
-          payerId,
+          payerId: group.payer,
           spentAt: `${group.paidAt}T00:00:00`,
           currency: group.isOverseas ? group.currency : undefined,
           bankName: group.bankName,
@@ -357,9 +380,7 @@ function SettlementRoomContent({
           items: group.items.map((item) => ({
             title: item.name,
             amount: Number(item.amount),
-            targetMemberIds: item.participants
-              .map((name) => memberIdByName.get(name))
-              .filter((id): id is number => id !== undefined),
+            targetMemberIds: item.participants,
           })),
         };
       });
@@ -464,6 +485,10 @@ function SettlementRoomContent({
           onSaved={(updated, newPin) => {
             onSettingSaved(updated, newPin);
             setIsSettingOpen(false);
+
+            loadFormInit().catch(() => {
+              toast.error("멤버 정보를 새로고침하지 못했어요");
+            });
           }}
           onDeleted={onSettingDeleted}
         />
@@ -571,7 +596,7 @@ function SettlementRoomContent({
                   key={group.id}
                   index={groupIndex + 1}
                   group={group}
-                  members={members}
+                  members={formMembers}
                   onChange={(next) => handleGroupChange(groupIndex, next)}
                   onRemove={
                     groups.length > 1
