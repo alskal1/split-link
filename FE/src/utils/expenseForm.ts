@@ -1,4 +1,5 @@
 import type {
+  ExpenseFormMemberInfo,
   ExpenseGroupFormValue,
   ExpenseItemFormValue,
 } from "../types/expenseType";
@@ -8,12 +9,12 @@ import type {
  * @param members 기본으로 선택할 참여자 목록 (기본 전체 선택)
  */
 export const createEmptyExpenseItem = (
-  members: string[],
+  members: ExpenseFormMemberInfo[],
 ): ExpenseItemFormValue => ({
   id: crypto.randomUUID(),
   name: "",
   amount: "",
-  participants: [...members],
+  participants: members.map((member) => member.memberId),
 });
 
 /**
@@ -21,10 +22,10 @@ export const createEmptyExpenseItem = (
  * @param members 기본으로 선택할 참여자 목록
  */
 export const createEmptyExpenseGroup = (
-  members: string[],
+  members: ExpenseFormMemberInfo[],
 ): ExpenseGroupFormValue => ({
   id: crypto.randomUUID(),
-  payer: "",
+  payer: null,
   paidAt: new Date().toISOString().slice(0, 10),
   isOverseas: false,
   currency: "USD",

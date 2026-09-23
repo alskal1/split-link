@@ -2,6 +2,7 @@ import { BANK_OPTIONS } from "../constants/bank";
 import { CURRENCY_OPTIONS } from "../constants/currency";
 import { createEmptyExpenseItem } from "../utils/expenseForm";
 import type {
+  ExpenseFormMemberInfo,
   ExpenseGroupFormValue,
   ExpenseItemFormValue,
 } from "../types/expenseType";
@@ -13,7 +14,7 @@ import xIcon from "../assets/x-gray.svg";
 interface ExpenseFormProps {
   index: number;
   group: ExpenseGroupFormValue;
-  members: string[];
+  members: ExpenseFormMemberInfo[];
   onChange: (group: ExpenseGroupFormValue) => void;
   onRemove?: () => void;
 }
@@ -95,10 +96,15 @@ export default function ExpenseForm({
             height="44px"
             options={[
               { label: "결제자 선택", value: "" },
-              ...members.map((member) => ({ label: member, value: member })),
+              ...members.map((member) => ({
+                label: member.name,
+                value: String(member.memberId),
+              })),
             ]}
-            option={group.payer}
-            onChange={(value) => onChange({ ...group, payer: value })}
+            option={group.payer !== null ? String(group.payer) : ""}
+            onChange={(value) =>
+              onChange({ ...group, payer: value ? Number(value) : null })
+            }
           />
         </div>
 
