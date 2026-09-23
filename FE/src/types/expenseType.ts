@@ -3,19 +3,19 @@
  * @param id 항목 식별자 (프론트 전용)
  * @param name 항목명
  * @param amount 금액 (입력 중엔 문자열로 관리, 제출 시 숫자로 변환)
- * @param participants 참여자 이름 목록
+ * @param participants 참여자 멤버 PK 목록
  */
 export interface ExpenseItemFormValue {
   id: string;
   name: string;
   amount: string;
-  participants: string[];
+  participants: number[];
 }
 
 /**
  * 결제자 · 날짜 단위의 지출 그룹
  * @param id 그룹 식별자 (프론트 전용)
- * @param payer 결제자
+ * @param payer 결제자 멤버 PK (미선택 시 null)
  * @param paidAt 결제일자 (yyyy-mm-dd)
  * @param isOverseas 해외결제 여부
  * @param currency 화폐단위 (해외결제 시에만 사용)
@@ -25,7 +25,7 @@ export interface ExpenseItemFormValue {
  */
 export interface ExpenseGroupFormValue {
   id: string;
-  payer: string;
+  payer: number | null;
   paidAt: string;
   isOverseas: boolean;
   currency: string;

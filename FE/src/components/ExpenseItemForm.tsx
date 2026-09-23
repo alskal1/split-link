@@ -1,11 +1,14 @@
-import type { ExpenseItemFormValue } from "../types/expenseType";
+import type {
+  ExpenseFormMemberInfo,
+  ExpenseItemFormValue,
+} from "../types/expenseType";
 import Input from "./Input";
 import xIcon from "../assets/x-gray.svg";
 
 interface ExpenseItemFormProps {
   index: number;
   item: ExpenseItemFormValue;
-  members: string[];
+  members: ExpenseFormMemberInfo[];
   onChange: (item: ExpenseItemFormValue) => void;
   onRemove?: () => void;
 }
@@ -28,12 +31,12 @@ export default function ExpenseItemForm({
 }: ExpenseItemFormProps) {
   /**
    * 참여자 선택 토글
-   * @param name 참여자 이름
+   * @param memberId 참여자 멤버 PK
    */
-  const toggleParticipant = (name: string) => {
-    const participants = item.participants.includes(name)
-      ? item.participants.filter((p) => p !== name)
-      : [...item.participants, name];
+  const toggleParticipant = (memberId: number) => {
+    const participants = item.participants.includes(memberId)
+      ? item.participants.filter((p) => p !== memberId)
+      : [...item.participants, memberId];
 
     onChange({ ...item, participants });
   };
@@ -76,20 +79,20 @@ export default function ExpenseItemForm({
 
       <div className="flex flex-wrap gap-2">
         {members.map((member) => {
-          const selected = item.participants.includes(member);
+          const selected = item.participants.includes(member.memberId);
 
           return (
             <label
-              key={member}
+              key={member.memberId}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold cursor-pointer badge-brand"
             >
               <input
                 type="checkbox"
                 className="w-4 h-4 accent-[#e85a48]"
                 checked={selected}
-                onChange={() => toggleParticipant(member)}
+                onChange={() => toggleParticipant(member.memberId)}
               />
-              <span>{member}</span>
+              <span>{member.name}</span>
             </label>
           );
         })}

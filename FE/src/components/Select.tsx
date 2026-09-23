@@ -37,7 +37,7 @@ export default function Select({
     <select
       className={`${className} appearance-none border border-[#e6dfd9] rounded-[10px] p-2`}
       style={{ width: width, height: height, backgroundColor: bgColor }}
-      defaultValue={option}
+      value={option}
       onChange={(e) => onChange?.(e.target.value)}
     >
       {options.map((opt) => (
