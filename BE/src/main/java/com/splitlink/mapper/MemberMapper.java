@@ -1,5 +1,6 @@
 package com.splitlink.mapper;
 
+import com.splitlink.dto.MemberUsageDto;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -19,25 +20,28 @@ public interface MemberMapper {
     List<ExpenseFormInitResponse.MemberInfo> findRoomMembersBySlug(@Param("slug") String slug,
                                                                    @Param("memberId") Long memberId);
 
+    /** 멤버의 계좌 정보(은행명, 계좌번호) 조회 */
+    Optional<ExpenseFormInitResponse.AccountInfo> findAccountInfoByMemberId(Long memberId);
+
+    /** 지정한 방(roomId)에 해당 멤버들(memberIds)이 모두 속해 있는지 개수 조회 */
+    int countMembersByRoomIdAndMemberIds(@Param("roomId") Long roomId,
+                                         @Param("memberIds") List<Long> memberIds);
+
+    /** 특정 방의 모든 멤버와 지출(결제/부담) 연관 여부 조회 */
+    List<MemberUsageDto> findMemberUsageStatusesByRoomId(Long roomId);
+
     /** 방 생성 시 초기 멤버 목록 일괄 저장 */
     void insertMembers(@Param("roomId") Long roomId,
                        @Param("memberNames") List<String> memberNames);
 
-    /** 특정 방의 전체 멤버 일괄 삭제 */
-    int deleteMembersByRoomId(Long roomId);
-
     /** 멤버 접속 선택 시 활성화 상태(is_active = true) 변경 */
     int updateIsActive(Long memberId);
-
-    /** 멤버의 계좌 정보(은행명, 계좌번호) 조회 */
-    Optional<ExpenseFormInitResponse.AccountInfo> findAccountInfoByMemberId(Long memberId);
 
     /** 결제자의 정산 계좌 정보(은행명, 계좌번호) 최신화 */
     void updateAccountInfo(@Param("memberId") Long memberId,
                           @Param("bankName") String bankName,
                           @Param("accountNumber") String accountNumber);
 
-    /** 지정한 방(roomId)에 해당 멤버들(memberIds)이 모두 속해 있는지 개수 조회 */
-    int countMembersByRoomIdAndMemberIds(@Param("roomId") Long roomId,
-                                         @Param("memberIds") List<Long> memberIds);
+    /** 지출 내역이 없는 멤버 ID 리스트 일괄 삭제 */
+    int deleteMembersByIds(@Param("memberIds") List<Long> memberIdsToDelete);
 }

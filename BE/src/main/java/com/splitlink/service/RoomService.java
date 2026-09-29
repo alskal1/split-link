@@ -1,6 +1,7 @@
 package com.splitlink.service;
 
 import com.splitlink.common.validator.RoomAccessValidator;
+import com.splitlink.dto.MemberUsageDto;
 import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
 import com.splitlink.dto.request.RoomUpdateRequest;
@@ -16,8 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 방 생성, 조회, 입장코드 검증 등 핵심 비즈니스 로직을 수행하는 서비스
@@ -120,37 +121,65 @@ public class RoomService {
     public RoomDetailResponse updateRoom(String slug, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
-        // 1. 입장코드 검증
-        validatePin(slug, request.getPin());
+        // 입장코드 및 입력값 유효성 검사
+        String sanitizedPin = request.getPin().trim();
+        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, sanitizedPin);
 
-        // 2. 입력값 유효성 검사
-        String targetPin = request.getPin();
+        // newPin 변경 요청이 있는 경우에만 유효성 검사 및 targetPin 변경
+        String targetPin = sanitizedPin;
         if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
             String trimmedNewPin = request.getNewPin().trim();
-
             if (!trimmedNewPin.matches(PIN_REGEX)) {
                 throw new IllegalArgumentException("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
             }
-
             targetPin = trimmedNewPin;
         }
 
         List<String> memberNames = validateAndSanitizeMembers(request.getMemberNames());
-
         String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
 
-        // 3. 방 정보 수정
+        // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 1회 조회
+        List<MemberUsageDto> currentMembers = memberMapper.findMemberUsageStatusesByRoomId(roomId);
+
+        Set<String> requestNames = new HashSet<>(memberNames);
+        Set<String> currentNames = currentMembers.stream()
+                .map(MemberUsageDto::getMemberName)
+                .collect(Collectors.toSet());
+
+        // 삭제 대상 검증 및 추출 (요청에서 제거된 멤버)
+        List<Long> memberIdsToDelete = new ArrayList<>();
+
+        for (MemberUsageDto member : currentMembers) {
+            if (!requestNames.contains(member.getMemberName())) {
+                // 결제자 또는 1/N 참여자로 지출 내역에 엮여있다면 예외 발생!
+                if (member.isHasExpenses()) {
+                    throw new IllegalArgumentException(String.format("'%s'님은 지출 내역(결제 또는 참여)이 존재하여 삭제할 수 없습니다.", member.getMemberName()));
+                }
+                memberIdsToDelete.add(member.getMemberId());
+            }
+        }
+
+        // 지출 내역이 없는 멤버만 일괄 삭제
+        if (!memberIdsToDelete.isEmpty()) {
+            memberMapper.deleteMembersByIds(memberIdsToDelete);
+        }
+
+        // 새로 추가된 이름만 일괄 등록
+        List<String> namesToAdd = memberNames.stream()
+                .filter(name -> !currentNames.contains(name))
+                .toList();
+
+        if (!namesToAdd.isEmpty()) {
+            memberMapper.insertMembers(roomId, namesToAdd);
+        }
+
+        // 방 기본 정보 업데이트
         int updatedRows = roomMapper.updateRoom(slug, request.getTitle(), sanitizedCurrency, targetPin);
         if (updatedRows == 0) {
             throw new IllegalArgumentException("존재하지 않거나 수정할 수 없는 방입니다.");
         }
 
-        // 4. 참여자 목록 전체 삭제 후 재등록
-        Long roomId = roomMapper.findRoomIdBySlug(slug);
-
-        memberMapper.deleteMembersByRoomId(roomId);
-        memberMapper.insertMembers(roomId, memberNames);
-
+        // 수정 완료된 방 상세 정보 반환
         return roomMapper.findDetailBySlug(slug);
     }
 

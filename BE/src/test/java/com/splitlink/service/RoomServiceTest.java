@@ -189,6 +189,53 @@ public class RoomServiceTest {
     }
 
     /**
+     * 방 정보 수정 실패 테스트 - 지출 참여자 삭제 시도 시 예외 발생
+     */
+    @Test
+    @DisplayName("지출 내역(결제자)이 존재하는 멤버를 삭제하려고 하면 예외가 발생한다")
+    void updateRoomFailDeleteMemberWithExpensesTest() {
+        // given 1. 방 생성
+        RoomCreateRequest createRequest = RoomCreateRequest.builder()
+                .title("지출 테스트방")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("지용", "태양"))
+                .build();
+        RoomCreateResponse createResponse = roomService.createRoom(createRequest);
+        String slug = createResponse.getSlug();
+
+        // given 2. 방 상세 정보 조회를 통해 roomId와 결제자(memberId) 획득
+        RoomDetailResponse roomDetail = roomService.accessRoom(slug, RoomAccessRequest.builder().pin("1234").build());
+        Long roomId = roomDetail.getRoomId();
+        Long payerId = roomDetail.getMembers().get(0).getMemberId(); // "지용"
+
+        // given 3. 지용이가 결제한 지출 1건 임의 등록
+        Expense dummyExpense = Expense.builder()
+                .roomId(roomId)
+                .payerId(payerId)
+                .title("테스트 지출")
+                .amount(new BigDecimal("10000"))
+                .currency("KRW")
+                .fxRate(new BigDecimal("1.0000"))
+                .spentAt(LocalDateTime.now())
+                .build();
+        expenseMapper.insertExpense(dummyExpense);
+
+        // given 4. 지용이를 멤버 목록에서 제거하는 수정 요청 DTO
+        RoomUpdateRequest invalidUpdateRequest = RoomUpdateRequest.builder()
+                .title("수정 방제목")
+                .baseCurrency("KRW")
+                .pin("1234")
+                .memberNames(List.of("태양")) // "지용" 삭제 시도
+                .build();
+
+        // when & then: 지출이 존재하는 멤버 제거 시 예외 발생 검증
+        assertThatThrownBy(() -> roomService.updateRoom(slug, invalidUpdateRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(String.format("'%s'님은 지출 내역(결제 또는 참여)이 존재하여 삭제할 수 없습니다.", roomDetail.getMembers().get(0).getName()));
+    }
+
+    /**
      * 방 정보 수정 실패 테스트 - 존재하지 않는 slug로 요청 시 예외 발생
      */
     @Test
@@ -207,7 +254,7 @@ public class RoomServiceTest {
         // when & then: IllegalArgumentException 예외 발생 검증
         assertThatThrownBy(() -> roomService.updateRoom(invalidSlug, updateRequest))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("해당 방이 없습니다.");
+                .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
     }
 
     /**
@@ -265,7 +312,7 @@ public class RoomServiceTest {
         // when & then
         assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), wrongPinRequest))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("입장코드가 일치하지 않습니다.");
+                .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
     }
 
     /**
