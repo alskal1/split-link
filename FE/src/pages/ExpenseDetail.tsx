@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { deleteExpense, getExpenseUpdateForm, updateExpense } from "../api/expense";
+import {
+  deleteExpense,
+  getExpenseUpdateForm,
+  updateExpense,
+} from "../api/expense";
 import { BANK_OPTIONS } from "../constants/bank";
 import type { ExpenseDetailResponse } from "../types/expenseType";
 import Modal from "../components/Modal";
+import ConfirmModal from "../components/ConfirmModal";
 import Button from "../components/Button";
 
 interface ExpenseDetailProps {
   slug: string;
   expense: ExpenseDetailResponse;
+  isLocked: boolean;
   onClose: () => void;
   onUpdated: () => void;
   onDeleted: () => void;
@@ -20,6 +26,7 @@ const INFO_BG_COLOR = "#fdf3eb";
  * 결제내역 항목 클릭 시 뜨는 상세 모달 (조회 · 수정 · 삭제)
  * @param slug 방 슬러그
  * @param expense 조회 대상 지출 상세 정보
+ * @param isLocked 방 잠금 여부 (잠기면 수정 폼 조회 없이 조회 전용으로 표시하고 수정/삭제 불가)
  * @param onClose 닫기 이벤트
  * @param onUpdated 수정 완료 이벤트
  * @param onDeleted 삭제 완료 이벤트
@@ -27,16 +34,28 @@ const INFO_BG_COLOR = "#fdf3eb";
 export default function ExpenseDetail({
   slug,
   expense,
+  isLocked,
   onClose,
   onUpdated,
   onDeleted,
 }: ExpenseDetailProps) {
   // 수정 폼 초기 데이터(결제자/참여자 선택용 멤버 목록) 로딩 여부
-  const [isLoading, setIsLoading] = useState(true);
+  // (잠긴 방은 수정할 수 없어 수정 폼을 조회하지 않으므로 로딩하지 않음)
+  const [isLoading, setIsLoading] = useState(!isLocked);
   // 수정 폼에서 선택 가능한 방 멤버 목록
+  // (잠긴 방은 상세 정보에 있는 결제자와 참여자만으로 조회 전용 화면을 구성)
   const [roomMembers, setRoomMembers] = useState<
     { memberId: number; name: string }[]
-  >([]);
+  >(() =>
+    isLocked
+      ? [
+          { memberId: expense.payerId, name: expense.payerName },
+          ...expense.targetMembers.filter(
+            (member) => member.memberId !== expense.payerId,
+          ),
+        ].map(({ memberId, name }) => ({ memberId, name }))
+      : [],
+  );
 
   // 수정 입력값 (항목명은 모달 제목으로만 표시, 별도 수정 UI 없음)
   const [title, setTitle] = useState(expense.title);
@@ -53,7 +72,13 @@ export default function ExpenseDetail({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
   useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+
     (async () => {
       try {
         const form = await getExpenseUpdateForm(slug, expense.expenseId);
@@ -75,7 +100,7 @@ export default function ExpenseDetail({
         setIsLoading(false);
       }
     })();
-  }, [slug, expense.expenseId]);
+  }, [slug, expense.expenseId, isLocked]);
 
   const isValid =
     title.trim().length > 0 &&
@@ -134,9 +159,7 @@ export default function ExpenseDetail({
       return;
     }
 
-    if (!window.confirm("이 결제내역을 삭제할까요? 되돌릴 수 없어요.")) {
-      return;
-    }
+    setIsDeleteConfirmOpen(false);
 
     setIsDeleting(true);
 
@@ -154,114 +177,139 @@ export default function ExpenseDetail({
   };
 
   return (
-    <Modal title={expense.title} onClose={onClose}>
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold">금액</div>
-        <input
-          className="w-full rounded-[10px] border border-[#e6dfd9] p-3"
-          style={{ backgroundColor: INFO_BG_COLOR }}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
-        />
-      </div>
-
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold">결제일자</div>
-        <input
-          type="date"
-          className="w-full rounded-[10px] border border-[#e6dfd9] p-3"
-          style={{ backgroundColor: INFO_BG_COLOR }}
-          value={spentAt}
-          onChange={(e) => setSpentAt(e.target.value)}
-        />
-      </div>
-
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold">결제자</div>
-        <select
-          className="w-full appearance-none rounded-[10px] border border-[#e6dfd9] p-3"
-          style={{ backgroundColor: INFO_BG_COLOR }}
-          value={payerId}
-          onChange={(e) => setPayerId(e.target.value)}
-        >
-          <option value="">결제자 선택</option>
-          {roomMembers.map((member) => (
-            <option key={member.memberId} value={String(member.memberId)}>
-              {member.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold">은행명 · 계좌번호</div>
-        <div className="flex items-center space-x-2">
-          <select
-            className="flex-1 appearance-none rounded-[10px] border border-[#e6dfd9] p-3"
+    <>
+      <Modal title={expense.title} onClose={onClose}>
+        <div className="flex flex-col space-y-2">
+          <div className="font-bold">금액</div>
+          <input
+            className="w-full rounded-[10px] border border-[#e6dfd9] p-3"
             style={{ backgroundColor: INFO_BG_COLOR }}
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
+            value={amount}
+            disabled={isLocked}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+          />
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <div className="font-bold">결제일자</div>
+          <input
+            type="date"
+            className="w-full rounded-[10px] border border-[#e6dfd9] p-3"
+            style={{ backgroundColor: INFO_BG_COLOR }}
+            value={spentAt}
+            disabled={isLocked}
+            onChange={(e) => setSpentAt(e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <div className="font-bold">결제자</div>
+          <select
+            className="w-full appearance-none rounded-[10px] border border-[#e6dfd9] p-3"
+            style={{ backgroundColor: INFO_BG_COLOR }}
+            value={payerId}
+            disabled={isLocked}
+            onChange={(e) => setPayerId(e.target.value)}
           >
-            <option value="">은행명</option>
-            {BANK_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            <option value="">결제자 선택</option>
+            {roomMembers.map((member) => (
+              <option key={member.memberId} value={String(member.memberId)}>
+                {member.name}
               </option>
             ))}
           </select>
-          <input
-            className="flex-1 rounded-[10px] border border-[#e6dfd9] p-3"
-            style={{ backgroundColor: INFO_BG_COLOR }}
-            placeholder="계좌번호"
-            value={accountNumber}
-            onChange={(e) => setAccountNumber(e.target.value)}
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <div className="font-bold">은행명 · 계좌번호</div>
+          <div className="flex items-center space-x-2">
+            <select
+              className="flex-1 appearance-none rounded-[10px] border border-[#e6dfd9] p-3"
+              style={{ backgroundColor: INFO_BG_COLOR }}
+              value={bankName}
+              disabled={isLocked}
+              onChange={(e) => setBankName(e.target.value)}
+            >
+              <option value="">은행명</option>
+              {BANK_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <input
+              className="flex-1 rounded-[10px] border border-[#e6dfd9] p-3"
+              style={{ backgroundColor: INFO_BG_COLOR }}
+              placeholder="계좌번호"
+              value={accountNumber}
+              disabled={isLocked}
+              onChange={(e) => setAccountNumber(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <div className="font-bold">참여자</div>
+          <div className="flex flex-wrap gap-2">
+            {roomMembers.map((member) => {
+              const selected = targetMemberIds.includes(member.memberId);
+
+              return (
+                <label
+                  key={member.memberId}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold cursor-pointer badge-brand"
+                >
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-[#e85a48]"
+                    checked={selected}
+                    disabled={isLocked}
+                    onChange={() => toggleParticipant(member.memberId)}
+                  />
+                  <span>{member.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {isLocked && (
+          <div className="explain-text">
+            정산이 시작되어 결제내역을 수정하거나 삭제할 수 없어요.
+          </div>
+        )}
+
+        <div className="flex items-center space-x-2">
+          <Button
+            title={isDeleting ? "삭제 중..." : "삭제"}
+            textColor="#c53829"
+            bgColor="#fff"
+            className="flex-1 rounded-[10px] border border-[#c53829]"
+            disabled={isLocked || isDeleting || isSaving}
+            onClick={() => setIsDeleteConfirmOpen(true)}
+          />
+
+          <Button
+            title={isSaving ? "저장 중..." : "저장"}
+            bgColor="#000"
+            textColor="#fff"
+            className="flex-1 rounded-[10px]"
+            disabled={
+              isLocked || !isValid || isSaving || isDeleting || isLoading
+            }
+            onClick={handleSave}
           />
         </div>
-      </div>
-
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold">참여자</div>
-        <div className="flex flex-wrap gap-2">
-          {roomMembers.map((member) => {
-            const selected = targetMemberIds.includes(member.memberId);
-
-            return (
-              <label
-                key={member.memberId}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold cursor-pointer badge-brand"
-              >
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-[#e85a48]"
-                  checked={selected}
-                  onChange={() => toggleParticipant(member.memberId)}
-                />
-                <span>{member.name}</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Button
-          title={isDeleting ? "삭제 중..." : "삭제"}
-          textColor="#c53829"
-          bgColor="#fff"
-          className="flex-1 rounded-[10px] border border-[#c53829]"
-          disabled={isDeleting || isSaving}
-          onClick={handleDelete}
+      </Modal>
+      {isDeleteConfirmOpen && (
+        <ConfirmModal
+          title="결제내역 삭제"
+          message="이 결제내역을 삭제할까요? 되돌릴 수 없어요."
+          confirmText="삭제"
+          onConfirm={handleDelete}
+          onCancel={() => setIsDeleteConfirmOpen(false)}
         />
-
-        <Button
-          title={isSaving ? "저장 중..." : "저장"}
-          bgColor="#000"
-          textColor="#fff"
-          className="flex-1 rounded-[10px]"
-          disabled={!isValid || isSaving || isDeleting || isLoading}
-          onClick={handleSave}
-        />
-      </div>
-    </Modal>
+      )}
+    </>
   );
 }
