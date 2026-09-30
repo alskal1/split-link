@@ -134,17 +134,28 @@ export interface MemberAccessStorage extends SelectMemberResponse {
 
 /**
  * 방 수정 요청 바디
- * 멤버는 이름 리스트로만 들어오며, 전체 삭제 후 재등록된다.
+ * 멤버는 {memberId?, name} 목록으로 전달한다.
+ * memberId가 있으면 기존 멤버(이름 변경), 없으면 신규 추가, 목록에서 빠진 기존 멤버는 삭제된다.
  * @param title 방 제목
  * @param baseCurrency 기준통화
  * @param pin 기존 입장코드 (권한 확인용)
  * @param newPin 새 입장코드 (선택, 미입력 시 유지)
- * @param memberNames 참여멤버
+ * @param members 참여멤버
  */
 export interface RoomUpdateRequest {
   title: string;
   baseCurrency: string;
   pin: string;
   newPin?: string;
-  memberNames: string[];
+  members: RoomMemberInput[];
+}
+
+/**
+ * 방 수정 요청용 멤버 단건
+ * @param memberId 기존 멤버 PK (신규 멤버는 생략)
+ * @param name 멤버 이름
+ */
+export interface RoomMemberInput {
+  memberId?: number;
+  name: string;
 }
