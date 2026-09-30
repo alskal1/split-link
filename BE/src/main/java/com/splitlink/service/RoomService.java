@@ -125,6 +125,9 @@ public class RoomService {
         String sanitizedPin = request.getPin().trim();
         Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, sanitizedPin);
 
+        // 지출 등록/수정/삭제 요청과의 경쟁 조건(Race Condition)을 방지
+        roomMapper.findRoomByIdForUpdate(roomId);
+
         // newPin 변경 요청이 있는 경우에만 유효성 검사 및 targetPin 변경
         String targetPin = sanitizedPin;
         if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
@@ -135,22 +138,24 @@ public class RoomService {
             targetPin = trimmedNewPin;
         }
 
-        List<String> memberNames = validateAndSanitizeMembers(request.getMemberNames());
+        // 요청 멤버 목록 정제 및 검증
+        List<RoomUpdateRequest.MemberRequest> memberRequests = sanitizeMemberRequests(request.getMembers());
         String sanitizedCurrency = request.getBaseCurrency().trim().toUpperCase();
 
-        // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 1회 조회
+        // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 조회
         List<MemberUsageDto> currentMembers = memberMapper.findMemberUsageStatusesByRoomId(roomId);
 
-        Set<String> requestNames = new HashSet<>(memberNames);
-        Set<String> currentNames = currentMembers.stream()
-                .map(MemberUsageDto::getMemberName)
+        // 이번 요청에서 넘어온 기존 멤버 ID 목록 (memberId != null)
+        Set<Long> requestMemberIds = memberRequests.stream()
+                .map(RoomUpdateRequest.MemberRequest::getMemberId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        // 삭제 대상 검증 및 추출 (요청에서 제거된 멤버)
+        // 삭제 대상 검증 및 추출 (기존 DB에는 있었으나, 요청 목록에서 빠진 memberId)
         List<Long> memberIdsToDelete = new ArrayList<>();
 
         for (MemberUsageDto member : currentMembers) {
-            if (!requestNames.contains(member.getMemberName())) {
+            if (!requestMemberIds.contains(member.getMemberId())) {
                 // 결제자 또는 1/N 참여자로 지출 내역에 엮여있다면 예외 발생!
                 if (member.isHasExpenses()) {
                     throw new IllegalArgumentException(String.format("'%s'님은 지출 내역(결제 또는 참여)이 존재하여 삭제할 수 없습니다.", member.getMemberName()));
@@ -164,9 +169,10 @@ public class RoomService {
             memberMapper.deleteMembersByIds(memberIdsToDelete);
         }
 
-        // 새로 추가된 이름만 일괄 등록
-        List<String> namesToAdd = memberNames.stream()
-                .filter(name -> !currentNames.contains(name))
+        // 신규 멤버만 추출하여 일괄 등록 (memberId == null)
+        List<String> namesToAdd = memberRequests.stream()
+                .filter(req -> req.getMemberId() == null)
+                .map(RoomUpdateRequest.MemberRequest::getName)
                 .toList();
 
         if (!namesToAdd.isEmpty()) {
@@ -254,5 +260,42 @@ public class RoomService {
         }
 
         return sanitizedMembers;
+    }
+
+    /**
+     * [방 수정 전용] MemberRequest 목록의 공백을 제거(trim)하고 방 내 중복 이름 여부를 검증
+     */
+    private List<RoomUpdateRequest.MemberRequest> sanitizeMemberRequests(List<RoomUpdateRequest.MemberRequest> rawRequests) {
+        log.info("RoomService:sanitizeMemberRequests 진입");
+
+        if (rawRequests == null || rawRequests.isEmpty()) {
+            throw new IllegalArgumentException("멤버를 최소 한 명 이상 입력해야 합니다.");
+        }
+
+        List<RoomUpdateRequest.MemberRequest> sanitizedList = new ArrayList<>();
+        List<String> sanitizedNames = new ArrayList<>();
+
+        for (RoomUpdateRequest.MemberRequest req : rawRequests) {
+            if (req.getName() == null || req.getName().trim().isEmpty()) {
+                throw new IllegalArgumentException("멤버 이름은 공백일 수 없습니다.");
+            }
+            String trimmedName = req.getName().trim();
+
+            // 이름 양끝 공백이 제거된 객체로 조립
+            sanitizedList.add(RoomUpdateRequest.MemberRequest.builder()
+                    .memberId(req.getMemberId())
+                    .name(trimmedName)
+                    .build());
+
+            sanitizedNames.add(trimmedName);
+        }
+
+        // 방 내 중복 이름 입력 방지 검증
+        long uniqueCount = sanitizedNames.stream().distinct().count();
+        if (uniqueCount != sanitizedNames.size()) {
+            throw new IllegalArgumentException("방 멤버 이름은 중복될 수 없습니다.");
+        }
+
+        return sanitizedList;
     }
 }

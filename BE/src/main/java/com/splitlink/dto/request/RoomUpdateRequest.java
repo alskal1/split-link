@@ -1,5 +1,6 @@
 package com.splitlink.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
@@ -32,7 +33,24 @@ public class RoomUpdateRequest {
     /** 새로운 입장코드 PIN 번호 (선택값: 입력 시 변경, 미입력 시 유지) */
     private String newPin;
 
-    /** 참여 멤버 이름 목록 */
+    /** 참여 멤버 목록 (기존 멤버 + 신규 멤버) */
     @NotEmpty(message = "최소 한 명 이상의 멤버가 필요합니다.")
-    private List<String> memberNames;
+    @Valid
+    private List<MemberRequest> members;
+
+    /**
+     * 방 수정 시 전달되는 개별 멤버 요청 정보
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MemberRequest {
+        /** 기존 멤버 ID (기존 멤버 수정/유지 시 필수, 신규 멤버 추가 시 null) */
+        private Long memberId;
+
+        /** 멤버 이름 */
+        @NotBlank(message = "멤버 이름은 필수입니다.")
+        private String name;
+    }
 }
