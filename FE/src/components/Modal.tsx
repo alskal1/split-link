@@ -45,7 +45,8 @@ export default function Modal({ title, onClose, children }: ModalProps) {
             <div className="text-xl font-bold">{title}</div>
             <button
               type="button"
-              className="w-8 h-8 flex items-center justify-center rounded-full badge-brand cursor-pointer shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-full cursor-pointer shrink-0"
+              style={{ backgroundColor: "#fdf3eb" }}
               aria-label="닫기"
               onClick={onClose}
             >
