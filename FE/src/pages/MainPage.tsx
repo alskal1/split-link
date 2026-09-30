@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import MainCard from "../components/MainCard";
 import mockup from "../assets/hero-mockup.png";
+import calcImg from "../assets/main-calc.png";
+import remitImg from "../assets/main-remit.png";
+import fxImg from "../assets/main-fx.png";
+import inviteImg from "../assets/main-invite.png";
 
 export default function MainPage() {
   const featureRef = useRef<HTMLDivElement>(null);
@@ -82,7 +86,7 @@ export default function MainPage() {
               title="정산 자동 계산"
               icon="calculator"
               iconBgColor="#ffdcd4"
-              pageImg=""
+              pageImg={calcImg}
               contents="누가 얼마 냈는지만 입력하면 1/N, 항목별, 인당 다르게까지 원하는
               방식으로 자동 계산돼요. 복잡한 엑셀은 이제 필요 없어요."
             />
@@ -90,7 +94,7 @@ export default function MainPage() {
               title="간편 송금"
               icon="arrow-right-left"
               iconBgColor="#f4e8bb"
-              pageImg=""
+              pageImg={remitImg}
               contents="계산이 끝나면 계좌번호를 복사해서 직접 보내거나, 토스로
               바로 넘겨서 송금할 수 있어요."
             />
@@ -98,7 +102,8 @@ export default function MainPage() {
               title="해외여행 환율 자동 반영"
               icon="globe"
               iconBgColor="#ffc4b9"
-              pageImg=""
+              pageImg={fxImg}
+              imgPosition="top"
               contents="결제일자와 현지 통화만 입력하면 그날 환율을 반영해서 원화 기준으로
               정산해드려요."
             />
@@ -106,7 +111,7 @@ export default function MainPage() {
               title="링크로 초대"
               icon="link"
               iconBgColor="#f4e8bb"
-              pageImg=""
+              pageImg={inviteImg}
               contents="게스트는 앱을 따로 설치할 필요 없이, 초대 링크만 누르면 바로
               모임에 참여하고 정산 내역을 확인할 수 있어요."
             />
