@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { getRoomSummary } from "../api/room";
+import { getRoomSummary, selectMember } from "../api/room";
 import {
   createExpenses,
   getExpenseDetail,
   getExpenseFormInit,
   getExpenseList,
 } from "../api/expense";
+import {
+  executeSettlement,
+  getMySettlement,
+  updateRemittanceStatus,
+} from "../api/settlement";
 import { createEmptyExpenseGroup } from "../utils/expenseForm";
 import {
   clearMemberAccess,
@@ -21,13 +26,18 @@ import type {
   ExpenseListResponse,
   ExpenseRecord,
 } from "../types/expenseType";
-import type { MemberAccessStorage, RoomSummaryResponse } from "../types/roomType";
+import type { RoomMySettlementResponse } from "../types/settlementType";
+import type {
+  MemberAccessStorage,
+  RoomMemberResponse,
+  RoomSummaryResponse,
+} from "../types/roomType";
 import Button from "../components/Button";
+import ConfirmModal from "../components/ConfirmModal";
 import ExpenseForm from "../components/ExpenseForm";
 import ExpenseDetail from "./ExpenseDetail";
 import SettlementRoomSetting from "./SettlementRoomSetting";
 import SettlementSummary from "./SettlementSummary";
-import type { SettlementCredit, SettlementDebt } from "./SettlementSummary";
 import settingsIcon from "../assets/settings.svg";
 
 export default function SettlementRoom() {
@@ -81,24 +91,54 @@ export default function SettlementRoom() {
    * 정산방 설정 저장 완료 반영
    * @param updated 수정된 방 상세 정보
    * @param newPin 저장 시 사용된(변경됐다면 새) 입장코드
+   * @param savedMembers 저장 후 새로 등록된 멤버 목록
+   * @returns 접근 정보 갱신 성공 여부
    */
-  const handleSettingSaved = (
+  const handleSettingSaved = async (
     updated: { title: string; baseCurrency: string; memberNames: string[] },
     newPin: string,
-  ) => {
+    savedMembers: RoomMemberResponse[],
+  ): Promise<boolean> => {
     setRoom((prev) =>
       prev
         ? { ...prev, title: updated.title, memberNames: updated.memberNames }
         : prev,
     );
 
-    const nextMemberAccess: MemberAccessStorage = {
-      ...memberAccess,
-      pin: newPin,
-      baseCurrency: updated.baseCurrency,
-    };
-    saveMemberAccess(nextMemberAccess);
-    setMemberAccess(nextMemberAccess);
+    // 방 수정 후 토큰을 재발급받기 위해 내 멤버를 다시 선택
+    // (이름이 바뀌었을 수 있으므로 memberId로 우선 찾음)
+    const me =
+      savedMembers.find((member) => member.memberId === memberAccess.memberId) ??
+      savedMembers.find((member) => member.name === memberAccess.memberName);
+
+    // 기존 토큰은 더 이상 유효하지 않으므로 재발급 요청 전에 제거
+    clearMemberAccess(slug);
+
+    try {
+      if (!me) {
+        throw new Error("내 멤버가 목록에서 제외되어 다시 선택해야 해요");
+      }
+
+      const data = await selectMember(slug, me.memberId);
+      if (!data) {
+        throw new Error("멤버 정보를 갱신하지 못했어요");
+      }
+
+      const nextMemberAccess: MemberAccessStorage = {
+        ...data,
+        pin: newPin,
+        baseCurrency: updated.baseCurrency,
+      };
+      saveMemberAccess(nextMemberAccess);
+      setMemberAccess(nextMemberAccess);
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "멤버를 다시 선택해주세요",
+      );
+      navigate(`/rooms/${slug}`, { replace: true });
+      return false;
+    }
   };
 
   /**
@@ -115,7 +155,6 @@ export default function SettlementRoom() {
       slug={slug}
       pin={memberAccess.pin}
       baseCurrency={memberAccess.baseCurrency}
-      memberName={memberAccess.memberName}
       onSettingSaved={handleSettingSaved}
       onSettingDeleted={handleSettingDeleted}
     />
@@ -127,7 +166,6 @@ function SettlementRoomContent({
   slug,
   pin,
   baseCurrency,
-  memberName,
   onSettingSaved,
   onSettingDeleted,
 }: {
@@ -135,14 +173,13 @@ function SettlementRoomContent({
   slug: string;
   pin: string;
   baseCurrency: string;
-  memberName: string;
   onSettingSaved: (
     updated: { title: string; baseCurrency: string; memberNames: string[] },
     newPin: string,
-  ) => void;
+    savedMembers: RoomMemberResponse[],
+  ) => Promise<boolean>;
   onSettingDeleted: () => void;
 }) {
-  const members = room.memberNames;
   // 정산방 설정 모달 오픈 여부
   const [isSettingOpen, setIsSettingOpen] = useState(false);
   // 지출 추가 드롭다운 오픈 여부
@@ -152,6 +189,13 @@ function SettlementRoomContent({
     useState<ExpenseDetailResponse | null>(null);
   // 정산 요약(보낼 금액) 모달 오픈 여부
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  // 정산 계산하기(서버 API 호출)로 조회한 내 정산 내역
+  const [mySettlement, setMySettlement] =
+    useState<RoomMySettlementResponse | null>(null);
+  // 정산 실행 진행 여부
+  const [isSettling, setIsSettling] = useState(false);
+
+  const [isSettleConfirmOpen, setIsSettleConfirmOpen] = useState(false);
 
   // 지출 입력 폼 (결제자 · 날짜 그룹 목록) - formInit 로드 후 초기화
   const [groups, setGroups] = useState<ExpenseGroupFormValue[]>([]);
@@ -168,6 +212,21 @@ function SettlementRoomContent({
   );
 
   /**
+   * 지출 상세 조회 (일시적인 실패에 대비해 1회 자동 재시도)
+   * @param expenseId 조회할 지출 내역 PK
+   */
+  const getExpenseDetailWithRetry = useCallback(
+    async (expenseId: number): Promise<ExpenseDetailResponse | undefined> => {
+      try {
+        return await getExpenseDetail(slug, expenseId);
+      } catch {
+        return await getExpenseDetail(slug, expenseId);
+      }
+    },
+    [slug],
+  );
+
+  /**
    * 지출 목록/정산 요약 및 정산 집계용 지출 상세를 서버에서 새로 조회해 반영
    * (등록 · 수정 · 삭제 직후 항상 이 함수로 새로고침하여 로컬 상태가 서버와 어긋나지 않도록 함)
    */
@@ -178,10 +237,19 @@ function SettlementRoomContent({
     }
     setExpenseSummary(summary);
 
-    // 조회 도중 다른 사용자가 삭제한 항목이 있어도(reject) 나머지 항목으로 계속 진행
+    // 다른 사용자가 삭제한 항목 등 재시도 후에도 계속 실패하는 항목이 있으면(reject)
+    // 나머지 항목으로는 계속 진행하되, 정산 금액이 실제와 다를 수 있음을 사용자에게 알림
     const results = await Promise.allSettled(
-      summary.expenses.map((item) => getExpenseDetail(slug, item.expenseId)),
+      summary.expenses.map((item) => getExpenseDetailWithRetry(item.expenseId)),
     );
+
+    const hasFailure = results.some((result) => result.status === "rejected");
+    if (hasFailure) {
+      toast.error(
+        "일부 지출 내역을 불러오지 못했어요. 화면을 새로고침해 다시 확인해주세요",
+      );
+    }
+
     const details = results
       .filter(
         (
@@ -267,44 +335,6 @@ function SettlementRoomContent({
 
   // 내가 보낼 금액 (부담해야 할 금액이 결제한 금액보다 많을 때만 발생)
   const myOwedAmount = Math.max(0, Math.round(myShareAmount - myPaidAmount));
-
-  // 결제자별로 내가 보내야 할 정산 금액 (서버가 계산한 내 부담금을 결제자별로 합산)
-  const debts: SettlementDebt[] = members
-    .filter((member) => member !== memberName)
-    .map((payer) => {
-      const payerExpenses = expenses.filter((expense) => expense.payer === payer);
-      const amount = payerExpenses.reduce((sum, expense) => {
-        const myShare = expense.participantShares.find((share) => share.isSelf);
-        return sum + (myShare?.shareAmount ?? 0);
-      }, 0);
-      const accountExpense = payerExpenses.find(
-        (expense) => expense.bankName && expense.accountNumber,
-      );
-
-      return {
-        payer,
-        amount: Math.round(amount),
-        bankName: accountExpense?.bankName ?? "",
-        accountNumber: accountExpense?.accountNumber ?? "",
-      };
-    })
-    .filter((debt) => debt.amount > 0);
-
-  // 내가 결제한 항목별로 다른 멤버가 나에게 보내야 할 정산 금액 (서버가 계산한 참여자별 부담금 사용)
-  const credits: SettlementCredit[] = members
-    .filter((member) => member !== memberName)
-    .map((debtor) => {
-      const myExpenses = expenses.filter((expense) => expense.isMyPayment);
-      const amount = myExpenses.reduce((sum, expense) => {
-        const share = expense.participantShares.find(
-          (participant) => participant.name === debtor,
-        );
-        return sum + (share?.shareAmount ?? 0);
-      }, 0);
-
-      return { debtor, amount: Math.round(amount) };
-    })
-    .filter((credit) => credit.amount > 0);
 
   /**
    * 그룹 값 변경
@@ -450,11 +480,94 @@ function SettlementRoomContent({
   };
 
   /**
+   * 정산 계산하기 버튼 클릭 이벤트
+   * (아직 정산 실행 전이면 수정 불가 안내 확인 후 서버에 정산 실행을 요청해 방을 잠그고 최소 송금 내역을 계산·저장한 뒤,
+   * 이미 실행된 방이면 저장된 정산 내역을 그대로 조회해 요약 모달에 표시)
+   */
+  const handleOpenSummary = async () => {
+    if (isSettling) {
+      return;
+    }
+
+    // 정산 실행 시 방이 잠겨 지출을 수정할 수 없으므로, 아직 실행 전인 방은 사용자에게 먼저 확인
+    if (!expenseSummary?.isLocked) {
+      setIsSettleConfirmOpen(true);
+      return;
+    }
+
+    await runSettlement();
+  };
+
+  /**
+   * 정산 실행(필요 시) 후 내 정산 내역 조회
+   */
+  const runSettlement = async () => {
+    setIsSettleConfirmOpen(false);
+    setIsSettling(true);
+
+    try {
+      if (!expenseSummary?.isLocked) {
+        await executeSettlement(slug);
+        await loadExpenses();
+      }
+
+      const settlement = await getMySettlement(slug);
+      if (!settlement) {
+        return;
+      }
+
+      setMySettlement(settlement);
+      setIsSummaryOpen(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "정산 계산에 실패했어요",
+      );
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  /**
    * 정산완료 처리 (등록된 결제내역 전체 초기화)
    */
   const handleSettlementComplete = () => {
     setExpenses([]);
+    setMySettlement(null);
     setIsSummaryOpen(false);
+  };
+
+  /**
+   * 개별 송금 완료 상태 토글 (낙관적 업데이트 후 실패 시 롤백)
+   * @param settlementId 정산 내역 PK
+   * @param isDone 변경할 완료 여부
+   */
+  const handleToggleSettlementDone = async (
+    settlementId: number,
+    isDone: boolean,
+  ) => {
+    const previous = mySettlement;
+    if (!previous) {
+      return;
+    }
+
+    setMySettlement({
+      ...previous,
+      sendList: previous.sendList.map((item) =>
+        item.settlementId === settlementId ? { ...item, isDone } : item,
+      ),
+      receiveList: previous.receiveList.map((item) =>
+        item.settlementId === settlementId ? { ...item, isDone } : item,
+      ),
+    });
+
+    try {
+      await updateRemittanceStatus(slug, settlementId, isDone);
+    } catch (error) {
+      setMySettlement(previous);
+      toast.error(
+        error instanceof Error ? error.message : "상태 변경에 실패했어요",
+      );
+    }
   };
 
   return (
@@ -468,7 +581,13 @@ function SettlementRoomContent({
           type="button"
           className="w-9 h-9 flex items-center justify-center rounded-full bg-white cursor-pointer"
           aria-label="설정"
-          onClick={() => setIsSettingOpen(true)}
+          onClick={() => {
+            if (!formInit) {
+              toast.error("멤버 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요");
+              return;
+            }
+            setIsSettingOpen(true);
+          }}
         >
           <img src={settingsIcon} alt="" className="w-4 h-4" />
         </button>
@@ -478,16 +597,29 @@ function SettlementRoomContent({
         <SettlementRoomSetting
           slug={slug}
           title={room.title}
-          members={members}
+          members={formMembers}
           pin={pin}
           baseCurrency={baseCurrency}
           onClose={() => setIsSettingOpen(false)}
-          onSaved={(updated, newPin) => {
-            onSettingSaved(updated, newPin);
+          onSaved={async (updated, newPin, savedMembers) => {
+            const isRefreshed = await onSettingSaved(
+              updated,
+              newPin,
+              savedMembers,
+            );
+            if (!isRefreshed) {
+              return;
+            }
+
             setIsSettingOpen(false);
 
-            loadFormInit().catch(() => {
-              toast.error("멤버 정보를 새로고침하지 못했어요");
+            loadFormInit().catch((error) => {
+              console.error("멤버 정보 새로고침 실패", error);
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "멤버 정보를 새로고침하지 못했어요",
+              );
             });
           }}
           onDeleted={onSettingDeleted}
@@ -498,18 +630,30 @@ function SettlementRoomContent({
         <ExpenseDetail
           slug={slug}
           expense={selectedExpense}
+          isLocked={expenseSummary?.isLocked ?? false}
           onClose={() => setSelectedExpense(null)}
           onUpdated={handleExpenseUpdated}
           onDeleted={handleExpenseDeleted}
         />
       )}
 
-      {isSummaryOpen && (
+      {isSettleConfirmOpen && (
+        <ConfirmModal
+          title="정산 계산"
+          message="정산을 계산하면 이후에는 결제내역을 추가·수정·삭제할 수 없어요. 계속할까요?"
+          confirmText="계산하기"
+          onConfirm={runSettlement}
+          onCancel={() => setIsSettleConfirmOpen(false)}
+        />
+      )}
+
+      {isSummaryOpen && mySettlement && (
         <SettlementSummary
-          debts={debts}
-          credits={credits}
+          sendList={mySettlement.sendList}
+          receiveList={mySettlement.receiveList}
           onClose={() => setIsSummaryOpen(false)}
           onComplete={handleSettlementComplete}
+          onToggleDone={handleToggleSettlementDone}
         />
       )}
 
@@ -628,12 +772,12 @@ function SettlementRoomContent({
       </div>
 
       <Button
-        title="정산 계산하기"
+        title={isSettling ? "계산 중..." : "정산 계산하기"}
         bgColor="#e85a48"
         textColor="#fff"
         className="w-full rounded-2xl h-12.5"
-        disabled={expenses.length === 0}
-        onClick={() => setIsSummaryOpen(true)}
+        disabled={expenses.length === 0 || isSettling}
+        onClick={handleOpenSummary}
       />
     </div>
   );
