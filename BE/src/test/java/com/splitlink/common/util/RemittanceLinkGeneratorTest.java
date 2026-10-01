@@ -125,4 +125,28 @@ class RemittanceLinkGeneratorTest {
         // 음수 금액
         assertThat(remittanceLinkGenerator.generateTossLink("신한은행", "123456", new BigDecimal("-1000"))).isNull();
     }
+
+    @Test
+    @DisplayName("성공: .00 소수점이 포함된 금액은 소수점을 제거하고 정수 파라미터로 생성한다.")
+    void generateTossLink_DecimalWithZeros_TruncatesToInteger() {
+        BigDecimal amount = new BigDecimal("1000.00");
+        String result = remittanceLinkGenerator.generateTossLink("카카오뱅크", "123456", amount);
+        assertThat(result).contains("amount=1000");
+    }
+
+    @Test
+    @DisplayName("성공: 소수점 이하 금액이 존재할 경우 절사하여 정수로 생성한다.")
+    void generateTossLink_DecimalAmount_TruncatesFraction() {
+        BigDecimal amount = new BigDecimal("1000.75");
+        String result = remittanceLinkGenerator.generateTossLink("카카오뱅크", "123456", amount);
+        assertThat(result).contains("amount=1000");
+    }
+
+    @Test
+    @DisplayName("예외: 1원 미만의 소수 금액(0.5원 등)은 소수점 절사 후 0원이 되므로 null을 반환한다.")
+    void generateTossLink_LessThanOneAmount_ReturnsNull() {
+        BigDecimal amount = new BigDecimal("0.5");
+        String result = remittanceLinkGenerator.generateTossLink("카카오뱅크", "123456", amount);
+        assertThat(result).isNull();
+    }
 }
