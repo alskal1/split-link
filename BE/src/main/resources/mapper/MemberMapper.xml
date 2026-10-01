@@ -30,6 +30,35 @@
         WHERE member_id = #{memberId}
     </select>
 
+    <!-- 지정한 방에 속한 멤버 수 조회 -->
+    <select id="countMembersByRoomIdAndMemberIds" resultType="int">
+        SELECT count(*)
+        FROM members
+        WHERE room_id = #{roomId}
+        AND member_id IN
+        <foreach collection="memberIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 특정 방의 모든 멤버와 지출(결제자 or 1/N 부담자) 참여 여부 조회 -->
+    <select id="findMemberUsageStatusesByRoomId" resultType="com.splitlink.dto.MemberUsageDto">
+        SELECT
+            m.member_id AS memberId,
+            m.name AS memberName,
+            CASE
+                WHEN e.payer_id IS NOT NULL OR es.member_id IS NOT NULL THEN TRUE
+                ELSE FALSE
+            END AS hasExpenses
+        FROM members m
+        LEFT JOIN expenses e
+            ON e.payer_id = m.member_id
+        LEFT JOIN expense_shares es
+            ON es.member_id = m.member_id
+        WHERE m.room_id = #{roomId}
+        GROUP BY m.member_id, m.name
+    </select>
+
     <!-- 방 생성 시 초기 멤버 목록 일괄 저장 -->
     <insert id="insertMembers">
         INSERT INTO members (
@@ -48,12 +77,6 @@
         WHERE member_id = #{memberId}
     </update>
 
-    <!-- 특정 방의 전체 멤버 일괄 삭제 -->
-    <delete id="deleteMembersByRoomId">
-        DELETE FROM members
-        WHERE room_id = #{roomId}
-    </delete>
-
     <!-- 결제자 계좌 정보 업데이트 -->
     <update id="updateAccountInfo">
         UPDATE members
@@ -62,14 +85,12 @@
         WHERE member_id = #{memberId}
     </update>
 
-    <!-- 지정한 방에 속한 멤버 수 조회 -->
-    <select id="countMembersByRoomIdAndMemberIds" resultType="int">
-        SELECT count(*)
-        FROM members
-        WHERE room_id = #{roomId}
-            AND member_id IN
-            <foreach collection="memberIds" item="id" open="(" separator="," close=")">
-                #{id}
-            </foreach>
-    </select>
+    <!-- 선택된 멤버 ID 목록 일괄 삭제 -->
+    <delete id="deleteMembersByIds">
+        DELETE FROM members
+        WHERE member_id IN
+        <foreach item="memberId" collection="memberIds" open="(" separator="," close=")">
+            #{memberId}
+        </foreach>
+    </delete>
 </mapper>

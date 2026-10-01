@@ -7,6 +7,7 @@ import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.entity.Expense;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.apache.ibatis.annotations.Mapper;
@@ -78,6 +79,8 @@ public interface ExpenseMapper {
      * 지출 부담금 Bulk Insert 전용 파라미터 전달 DTO
      */
     @Getter
+    @Builder
+    @NoArgsConstructor
     @AllArgsConstructor
     class ExpenseShareParam {
         private Long expenseId;
