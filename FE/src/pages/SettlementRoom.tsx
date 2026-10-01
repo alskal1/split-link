@@ -65,9 +65,15 @@ export default function SettlementRoom() {
     }
     setMemberAccess(access);
 
+    // slug 변경/언마운트 이후 도착한 응답이 상태·이동에 반영되지 않도록 취소 플래그 사용
+    let cancelled = false;
+
     (async () => {
       try {
         const summary = await getRoomSummary(slug);
+        if (cancelled) {
+          return;
+        }
 
         // 방 정보 없을 경우 메인 페이지로 이동
         if (!summary) {
@@ -77,14 +83,22 @@ export default function SettlementRoom() {
 
         setRoom(summary);
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         toast.error("방 정보를 불러오지 못했어요");
         navigate("/", { replace: true });
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, navigate]);
 
   if (!room || !slug || !memberAccess) {
-    return null;
+    return <div className="explain-text">불러오는 중...</div>;
   }
 
   /**
@@ -194,6 +208,10 @@ function SettlementRoomContent({
     useState<RoomMySettlementResponse | null>(null);
   // 정산 실행 진행 여부
   const [isSettling, setIsSettling] = useState(false);
+  // 송금 완료 상태 변경 요청이 진행 중인 정산 내역 PK 목록
+  const [pendingSettlementIds, setPendingSettlementIds] = useState<number[]>(
+    [],
+  );
 
   const [isSettleConfirmOpen, setIsSettleConfirmOpen] = useState(false);
 
@@ -322,6 +340,9 @@ function SettlementRoomContent({
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
 
+  // 정산 실행으로 방이 잠긴 여부 (잠기면 결제내역 추가·수정·삭제, 멤버 변경 불가)
+  const isLocked = expenseSummary?.isLocked ?? false;
+
   // 내가 결제한 금액
   const myPaidAmount = expenses
     .filter((expense) => expense.isMyPayment)
@@ -389,7 +410,7 @@ function SettlementRoomContent({
    * 지출 추가하기 버튼 클릭 이벤트
    */
   const handleSubmit = async () => {
-    if (!isValid || isSubmiting || !formInit) {
+    if (!isValid || isSubmiting || !formInit || isLocked) {
       return;
     }
 
@@ -508,11 +529,21 @@ function SettlementRoomContent({
     try {
       if (!expenseSummary?.isLocked) {
         await executeSettlement(slug);
-        await loadExpenses();
+
+        // 서버에서 방이 이미 잠겼으므로, 이후 단계가 실패해도 재실행되지 않도록 로컬 상태를 먼저 반영
+        setExpenseSummary((prev) => (prev ? { ...prev, isLocked: true } : prev));
+
+        // 목록 새로고침 실패가 정산 내역 조회를 막지 않도록 분리
+        try {
+          await loadExpenses();
+        } catch {
+          toast.error("지출 목록을 새로고침하지 못했어요");
+        }
       }
 
       const settlement = await getMySettlement(slug);
       if (!settlement) {
+        toast.error("정산 내역을 불러오지 못했어요");
         return;
       }
 
@@ -528,12 +559,11 @@ function SettlementRoomContent({
   };
 
   /**
-   * 정산완료 처리 (등록된 결제내역 전체 초기화)
+   * 정산완료 처리 (요약 모달만 닫고, 정산 내역은 이후에도 다시 조회 가능)
    */
   const handleSettlementComplete = () => {
-    setExpenses([]);
-    setMySettlement(null);
     setIsSummaryOpen(false);
+    toast.success("정산을 완료했어요");
   };
 
   /**
@@ -545,27 +575,47 @@ function SettlementRoomContent({
     settlementId: number,
     isDone: boolean,
   ) => {
-    const previous = mySettlement;
-    if (!previous) {
+    // 같은 항목의 요청이 진행 중이면 중복 요청 방지
+    if (pendingSettlementIds.includes(settlementId)) {
       return;
     }
 
-    setMySettlement({
-      ...previous,
-      sendList: previous.sendList.map((item) =>
-        item.settlementId === settlementId ? { ...item, isDone } : item,
-      ),
-      receiveList: previous.receiveList.map((item) =>
-        item.settlementId === settlementId ? { ...item, isDone } : item,
-      ),
-    });
+    /**
+     * 해당 정산 내역 항목의 완료 여부만 변경 (다른 항목 상태는 유지)
+     */
+    const applyDone = (value: boolean) => {
+      setMySettlement((prev) =>
+        prev
+          ? {
+              ...prev,
+              sendList: prev.sendList.map((item) =>
+                item.settlementId === settlementId
+                  ? { ...item, isDone: value }
+                  : item,
+              ),
+              receiveList: prev.receiveList.map((item) =>
+                item.settlementId === settlementId
+                  ? { ...item, isDone: value }
+                  : item,
+              ),
+            }
+          : prev,
+      );
+    };
+
+    setPendingSettlementIds((prev) => [...prev, settlementId]);
+    applyDone(isDone);
 
     try {
       await updateRemittanceStatus(slug, settlementId, isDone);
     } catch (error) {
-      setMySettlement(previous);
+      applyDone(!isDone);
       toast.error(
         error instanceof Error ? error.message : "상태 변경에 실패했어요",
+      );
+    } finally {
+      setPendingSettlementIds((prev) =>
+        prev.filter((id) => id !== settlementId),
       );
     }
   };
@@ -600,6 +650,7 @@ function SettlementRoomContent({
           members={formMembers}
           pin={pin}
           baseCurrency={baseCurrency}
+          isLocked={isLocked}
           onClose={() => setIsSettingOpen(false)}
           onSaved={async (updated, newPin, savedMembers) => {
             const isRefreshed = await onSettingSaved(
@@ -630,7 +681,7 @@ function SettlementRoomContent({
         <ExpenseDetail
           slug={slug}
           expense={selectedExpense}
-          isLocked={expenseSummary?.isLocked ?? false}
+          isLocked={isLocked}
           onClose={() => setSelectedExpense(null)}
           onUpdated={handleExpenseUpdated}
           onDeleted={handleExpenseDeleted}
@@ -651,6 +702,7 @@ function SettlementRoomContent({
         <SettlementSummary
           sendList={mySettlement.sendList}
           receiveList={mySettlement.receiveList}
+          pendingSettlementIds={pendingSettlementIds}
           onClose={() => setIsSummaryOpen(false)}
           onComplete={handleSettlementComplete}
           onToggleDone={handleToggleSettlementDone}
@@ -699,6 +751,11 @@ function SettlementRoomContent({
         </div>
       )}
 
+      {isLocked ? (
+        <div className="explain-text">
+          정산이 시작되어 결제내역을 추가할 수 없어요.
+        </div>
+      ) : (
       <div className="flex flex-col space-y-4 rounded-[10px] bg-white p-4">
         <button
           type="button"
@@ -770,13 +827,22 @@ function SettlementRoomContent({
           </>
         )}
       </div>
+      )}
 
       <Button
-        title={isSettling ? "계산 중..." : "정산 계산하기"}
+        title={
+          isSettling
+            ? "계산 중..."
+            : isLocked
+              ? "정산 내역 보기"
+              : "정산 계산하기"
+        }
         bgColor="#e85a48"
         textColor="#fff"
         className="w-full rounded-2xl h-12.5"
-        disabled={expenses.length === 0 || isSettling}
+        disabled={
+          !expenseSummary || expenseSummary.expenses.length === 0 || isSettling
+        }
         onClick={handleOpenSummary}
       />
     </div>
