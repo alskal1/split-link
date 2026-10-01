@@ -42,6 +42,8 @@ export default function ExpenseDetail({
   // 수정 폼 초기 데이터(결제자/참여자 선택용 멤버 목록) 로딩 여부
   // (잠긴 방은 수정할 수 없어 수정 폼을 조회하지 않으므로 로딩하지 않음)
   const [isLoading, setIsLoading] = useState(!isLocked);
+  // 수정 폼 초기 데이터 조회 실패 여부 (멤버 목록 없이 저장되는 것을 방지)
+  const [isLoadFailed, setIsLoadFailed] = useState(false);
   // 수정 폼에서 선택 가능한 방 멤버 목록
   // (잠긴 방은 상세 정보에 있는 결제자와 참여자만으로 조회 전용 화면을 구성)
   const [roomMembers, setRoomMembers] = useState<
@@ -79,27 +81,47 @@ export default function ExpenseDetail({
       return;
     }
 
+    let cancelled = false;
+
     (async () => {
       try {
         const form = await getExpenseUpdateForm(slug, expense.expenseId);
-        if (form) {
-          setRoomMembers(form.roomMembers);
-          setTitle(form.title);
-          setAmount(String(form.amount));
-          setSpentAt(form.spentAt.slice(0, 10));
-          setPayerId(String(form.payerId));
-          setTargetMemberIds(form.targetMemberIds);
+        if (cancelled) {
+          return;
         }
+
+        if (!form) {
+          setIsLoadFailed(true);
+          return;
+        }
+
+        setRoomMembers(form.roomMembers);
+        setTitle(form.title);
+        setAmount(String(form.amount));
+        setSpentAt(form.spentAt.slice(0, 10));
+        setPayerId(String(form.payerId));
+        setTargetMemberIds(form.targetMemberIds);
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setIsLoadFailed(true);
         toast.error(
           error instanceof Error
             ? error.message
             : "지출 수정 정보를 불러오지 못했어요",
         );
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, expense.expenseId, isLocked]);
 
   const isValid =
@@ -279,6 +301,12 @@ export default function ExpenseDetail({
           </div>
         )}
 
+        {isLoadFailed && (
+          <div className="explain-text">
+            수정 정보를 불러오지 못해 저장할 수 없어요. 닫았다가 다시 열어주세요.
+          </div>
+        )}
+
         <div className="flex items-center space-x-2">
           <Button
             title={isDeleting ? "삭제 중..." : "삭제"}
@@ -295,7 +323,12 @@ export default function ExpenseDetail({
             textColor="#fff"
             className="flex-1 rounded-[10px]"
             disabled={
-              isLocked || !isValid || isSaving || isDeleting || isLoading
+              isLocked ||
+              !isValid ||
+              isSaving ||
+              isDeleting ||
+              isLoading ||
+              isLoadFailed
             }
             onClick={handleSave}
           />
