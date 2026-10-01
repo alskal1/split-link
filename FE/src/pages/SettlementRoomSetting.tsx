@@ -28,6 +28,7 @@ interface SettlementRoomSettingProps {
   members: ExpenseFormMemberInfo[];
   pin: string;
   baseCurrency: string;
+  isLocked: boolean;
   onClose: () => void;
   onSaved: (
     updated: { title: string; baseCurrency: string; memberNames: string[] },
@@ -46,6 +47,7 @@ const INPUT_BG_COLOR = "#fdf3eb";
  * @param members 참여 멤버 목록 (memberId 포함)
  * @param pin 기존 입장코드 (수정/삭제 권한 확인용)
  * @param baseCurrency 기준통화
+ * @param isLocked 방 잠금 여부 (잠기면 참여 멤버 추가·삭제 불가)
  * @param onClose 닫기 이벤트
  * @param onSaved 저장 완료 이벤트
  * @param onDeleted 삭제 완료 이벤트
@@ -56,6 +58,7 @@ export default function SettlementRoomSetting({
   members: initialMembers,
   pin: initialPin,
   baseCurrency,
+  isLocked,
   onClose,
   onSaved,
   onDeleted,
@@ -72,9 +75,6 @@ export default function SettlementRoomSetting({
       name: member.name,
     })),
   );
-  // 이름 수정 중인 멤버 key와 입력값
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
   // 신규 멤버 로컬 키 발급용
   const newKeySeq = useRef(0);
   // 참여 멤버 입력란
@@ -100,6 +100,10 @@ export default function SettlementRoomSetting({
    * 참여멤버 추가
    */
   const handleAddMember = () => {
+    if (isLocked) {
+      return;
+    }
+
     const name = memberInput.trim();
 
     if (!name) {
@@ -135,71 +139,11 @@ export default function SettlementRoomSetting({
    * @param key 참여 멤버 로컬 키
    */
   const handleRemoveMember = (key: string) => {
+    if (isLocked) {
+      return;
+    }
+
     setMembers(members.filter((member) => member.key !== key));
-    if (editingKey === key) {
-      setEditingKey(null);
-    }
-  };
-
-  /**
-   * 참여 멤버 이름 수정 시작
-   * @param member 수정할 멤버
-   */
-  const handleStartEditMember = (member: EditableMember) => {
-    setEditingKey(member.key);
-    setEditingName(member.name);
-  };
-
-  /**
-   * 참여 멤버 이름 수정 확정
-   */
-  const handleCommitEditMember = () => {
-    if (editingKey === null) {
-      return;
-    }
-
-    const name = editingName.trim();
-    const target = members.find((member) => member.key === editingKey);
-
-    if (!target || name === target.name) {
-      setEditingKey(null);
-      return;
-    }
-
-    if (!name) {
-      toast.error("이름을 입력해주세요.");
-      return;
-    }
-
-    if (members.some((member) => member.key !== editingKey && member.name === name)) {
-      toast.error("이미 등록된 이름이에요");
-      return;
-    }
-
-    setMembers(
-      members.map((member) =>
-        member.key === editingKey ? { ...member, name } : member,
-      ),
-    );
-    setEditingKey(null);
-  };
-
-  /**
-   * 참여멤버 이름 수정란 keyDown 이벤트
-   * @param e
-   */
-  const handleEditKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.nativeEvent.isComposing) {
-      return;
-    }
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleCommitEditMember();
-    } else if (e.key === "Escape") {
-      e.stopPropagation();
-      setEditingKey(null);
-    }
   };
 
   /**
@@ -254,12 +198,6 @@ export default function SettlementRoomSetting({
       return;
     }
 
-    // 이름 수정 중인 값이 있으면 먼저 반영
-    if (editingKey !== null) {
-      toast.error("수정 중인 멤버 이름을 확정해주세요");
-      return;
-    }
-
     if (members.length === 0) {
       toast.error("참여 멤버를 한 명 이상 등록해주세요");
       return;
@@ -278,11 +216,13 @@ export default function SettlementRoomSetting({
       });
 
       if (!data) {
+        toast.error("정산방 설정 저장에 실패했어요");
         return;
       }
 
       toast.success("정산방 설정을 저장했어요");
-      onSaved(
+      // 부모의 토큰 재발급이 끝날 때까지 isSubmiting을 유지해 중복 저장 방지
+      await onSaved(
         {
           title: data.title,
           baseCurrency: data.baseCurrency,
@@ -337,31 +277,11 @@ export default function SettlementRoomSetting({
                   key={member.key}
                   className="flex items-center gap-2 rounded-full pl-3 pr-1.5 py-1.5 badge-brand"
                 >
-                  {editingKey === member.key ? (
-                    <input
-                      autoFocus
-                      className="w-24 bg-transparent font-semibold outline-none border-b border-current"
-                      value={editingName}
-                      maxLength={50}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={handleEditKeyDown}
-                      onBlur={handleCommitEditMember}
-                      aria-label={`${member.name} 이름 수정`}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="font-semibold cursor-pointer"
-                      onClick={() => handleStartEditMember(member)}
-                      aria-label={`${member.name} 이름 수정`}
-                    >
-                      {member.name}
-                    </button>
-                  )}
+                  <span className="font-semibold">{member.name}</span>
                   <button
                     type="button"
-                    className="w-5 h-5 flex items-center justify-center rounded-full bg-[#c53829] cursor-pointer shrink-0"
-                    onMouseDown={(e) => e.preventDefault()}
+                    className="w-5 h-5 flex items-center justify-center rounded-full bg-[#c53829] cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default"
+                    disabled={isLocked}
                     onClick={() => handleRemoveMember(member.key)}
                     aria-label={`${member.name} 삭제`}
                   >
@@ -380,15 +300,22 @@ export default function SettlementRoomSetting({
               onChange={(e) => setMemberInput(e.target.value)}
               onKeyDown={handleMemberInputKeyDown}
               maxLength={50}
+              disabled={isLocked}
             />
             <Button
               title="추가"
               bgColor="#000"
               textColor="#fff"
               className="rounded-[10px]"
+              disabled={isLocked}
               onClick={handleAddMember}
             />
           </div>
+          {isLocked && (
+            <div className="explain-text">
+              정산이 시작되어 멤버를 변경할 수 없어요.
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col space-y-2">
