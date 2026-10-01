@@ -10,6 +10,7 @@ interface inputProps {
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
   maxLength?: number;
+  disabled?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ interface inputProps {
  * @param onChange 입력값 변경 이벤트
  * @param onKeyDown 키 입력 이벤트
  * @param maxLength 최대 입력 길이
+ * @param disabled 비활성화 여부
  * @returns
  */
 export default function Input({
@@ -35,6 +37,7 @@ export default function Input({
   onChange,
   onKeyDown,
   maxLength,
+  disabled,
 }: inputProps) {
   return (
     <input
@@ -44,6 +47,7 @@ export default function Input({
       onChange={onChange}
       onKeyDown={onKeyDown}
       maxLength={maxLength}
+      disabled={disabled}
       style={{ width: width, height: height, backgroundColor: bgColor }}
     />
   );
