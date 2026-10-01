@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -43,10 +44,18 @@ public class RemittanceLinkGenerator {
             // 정제된 은행명 URL 인코딩 처리
             String encodedBank = URLEncoder.encode(normalizedBank, StandardCharsets.UTF_8);
 
-            return String.format("supertoss://send?bank=%s&accountNo=%s&amount=%s",
+            // 소수점 절사 및 long 범위를 넘어서는 거대 금액 오버플로우 방지 (longValueExact 사용)
+            long longAmount = amount.setScale(0, RoundingMode.DOWN).longValueExact();
+
+            // 절사 결과가 0 이하인 경우 방어 (1원 미만 소수 금액 입력 시 amount=0 생성 방지)
+            if (longAmount <= 0) {
+                return null;
+            }
+
+            return String.format("supertoss://send?bank=%s&accountNo=%s&amount=%d",
                     encodedBank,
                     cleanAccount,
-                    amount.toPlainString());
+                    longAmount);
         } catch (Exception e) {
             return null;
         }
@@ -59,7 +68,6 @@ public class RemittanceLinkGenerator {
         String trimmed = bankName.trim();
 
         // "국민은행", "신한은행", "농협은행" 등 "~은행"으로 끝나는 경우 "은행" 제거
-        // 예: "국민은행" -> "국민", "신한은행" -> "신한"
         // "카카오뱅크", "토스뱅크" 등은 "은행"으로 끝나지 않으므로 그대로 유지됨
         if (trimmed.endsWith("은행") && trimmed.length() > 2) {
             return trimmed.substring(0, trimmed.length() - 2);
