@@ -12,6 +12,7 @@ import type {
 interface SettlementSummaryProps {
   sendList: SettlementSendItem[];
   receiveList: SettlementReceiveItem[];
+  pendingSettlementIds: number[];
   onClose: () => void;
   onComplete: () => void;
   onToggleDone: (settlementId: number, isDone: boolean) => void;
@@ -20,22 +21,26 @@ interface SettlementSummaryProps {
 /**
  * 완료 여부를 토글하는 체크박스 (금액 옆에 붙여 표시)
  * @param isDone 완료 여부
+ * @param disabled 비활성화 여부 (상태 변경 요청 진행 중)
  * @param onChange 토글 변경 이벤트
  */
 function DoneCheckbox({
   isDone,
+  disabled,
   onChange,
 }: {
   isDone: boolean;
+  disabled: boolean;
   onChange: () => void;
 }) {
   return (
     <input
       type="checkbox"
       checked={isDone}
+      disabled={disabled}
       onChange={onChange}
       aria-label="완료 여부"
-      className="h-5 w-5 shrink-0 cursor-pointer accent-[#e85a48]"
+      className="h-5 w-5 shrink-0 cursor-pointer accent-[#e85a48] disabled:cursor-default disabled:opacity-50"
     />
   );
 }
@@ -45,6 +50,7 @@ function DoneCheckbox({
  * 결제자이면서 동시에 송금도 해야 하는 경우가 있으므로, 받을 금액과 보낼 금액을 각각 있는 만큼 모두 보여준다.
  * @param sendList 결제자별로 보낼 금액 목록
  * @param receiveList 나에게 보내야 할 사람별 받을 금액 목록
+ * @param pendingSettlementIds 완료 상태 변경 요청이 진행 중인 정산 내역 PK 목록
  * @param onClose 닫기 이벤트
  * @param onComplete 정산완료 이벤트
  * @param onToggleDone 개별 항목 완료 상태 토글 이벤트
@@ -52,6 +58,7 @@ function DoneCheckbox({
 export default function SettlementSummary({
   sendList,
   receiveList,
+  pendingSettlementIds,
   onClose,
   onComplete,
   onToggleDone,
@@ -104,6 +111,11 @@ export default function SettlementSummary({
   const doneCreditsCount = receiveList.filter((item) => item.isDone).length;
   const doneDebtsCount = sendList.filter((item) => item.isDone).length;
 
+  // 내 보낼/받을 항목이 모두 완료 체크된 경우에만 정산완료 가능
+  const isAllDone =
+    doneCreditsCount === receiveList.length &&
+    doneDebtsCount === sendList.length;
+
   return (
     <>
       <Modal title="정산 요약" onClose={onClose}>
@@ -151,6 +163,7 @@ export default function SettlementSummary({
                     </span>
                     <DoneCheckbox
                       isDone={item.isDone}
+                      disabled={pendingSettlementIds.includes(item.settlementId)}
                       onChange={() =>
                         onToggleDone(item.settlementId, !item.isDone)
                       }
@@ -201,6 +214,9 @@ export default function SettlementSummary({
                       </span>
                       <DoneCheckbox
                         isDone={item.isDone}
+                        disabled={pendingSettlementIds.includes(
+                          item.settlementId,
+                        )}
                         onChange={() =>
                           onToggleDone(item.settlementId, !item.isDone)
                         }
@@ -242,12 +258,19 @@ export default function SettlementSummary({
           </div>
         )}
 
+        {!isAllDone && (
+          <div className="text-center text-[9pt] text-[#281c18]">
+            모든 송금을 체크하면 정산을 완료할 수 있어요.
+          </div>
+        )}
+
         <div className="flex items-center space-x-3">
           <Button
             title="정산완료"
             bgColor="#e85a48"
             textColor="#fff"
             className="flex-1 rounded-[10px]"
+            disabled={!isAllDone || pendingSettlementIds.length > 0}
             onClick={onComplete}
           />
           <Button
