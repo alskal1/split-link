@@ -43,10 +43,13 @@ public class RemittanceLinkGenerator {
             // 정제된 은행명 URL 인코딩 처리
             String encodedBank = URLEncoder.encode(normalizedBank, StandardCharsets.UTF_8);
 
-            return String.format("supertoss://send?bank=%s&accountNo=%s&amount=%s",
+            // BigDecimal -> long 변환으로 소수점 제거
+            long longAmount = amount.longValue();
+
+            return String.format("supertoss://send?bank=%s&accountNo=%s&amount=%d",
                     encodedBank,
                     cleanAccount,
-                    amount.toPlainString());
+                    longAmount);
         } catch (Exception e) {
             return null;
         }
