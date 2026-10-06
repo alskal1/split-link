@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { getRoomSummary, selectMember } from "../api/room";
+import { getRoomSummary } from "../api/room";
 import {
   createExpenses,
   getExpenseDetail,
@@ -119,40 +119,30 @@ export default function SettlementRoom() {
         : prev,
     );
 
-    // 방 수정 후 토큰을 재발급받기 위해 내 멤버를 다시 선택
+    // 토큰에는 roomId/memberId만 담기므로 설정 저장 후에도 기존 토큰을 그대로 사용
     // (이름이 바뀌었을 수 있으므로 memberId로 우선 찾음)
     const me =
       savedMembers.find((member) => member.memberId === memberAccess.memberId) ??
       savedMembers.find((member) => member.name === memberAccess.memberName);
 
-    // 기존 토큰은 더 이상 유효하지 않으므로 재발급 요청 전에 제거
-    clearMemberAccess(slug);
-
-    try {
-      if (!me) {
-        throw new Error("내 멤버가 목록에서 제외되어 다시 선택해야 해요");
-      }
-
-      const data = await selectMember(slug, me.memberId);
-      if (!data) {
-        throw new Error("멤버 정보를 갱신하지 못했어요");
-      }
-
-      const nextMemberAccess: MemberAccessStorage = {
-        ...data,
-        pin: newPin,
-        baseCurrency: updated.baseCurrency,
-      };
-      saveMemberAccess(nextMemberAccess);
-      setMemberAccess(nextMemberAccess);
-      return true;
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "멤버를 다시 선택해주세요",
-      );
+    if (!me) {
+      clearMemberAccess(slug);
+      toast.error("내 멤버가 목록에서 제외되어 다시 선택해야 해요");
       navigate(`/rooms/${slug}`, { replace: true });
       return false;
     }
+
+    const nextMemberAccess: MemberAccessStorage = {
+      ...memberAccess,
+      title: updated.title,
+      memberId: me.memberId,
+      memberName: me.name,
+      pin: newPin,
+      baseCurrency: updated.baseCurrency,
+    };
+    saveMemberAccess(nextMemberAccess);
+    setMemberAccess(nextMemberAccess);
+    return true;
   };
 
   /**
@@ -323,6 +313,30 @@ function SettlementRoomContent({
     })();
   }, [slug, loadFormInit, loadExpenses]);
 
+  // 정산 실행으로 잠긴 방은 새로고침해도 서버 정산 결과로 보낼/받을 금액을 표시
+  const isSummaryLocked = expenseSummary?.isLocked ?? false;
+  useEffect(() => {
+    if (!isSummaryLocked) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const settlement = await getMySettlement(slug);
+        if (!cancelled && settlement) {
+          setMySettlement(settlement);
+        }
+      } catch {
+        // 조회 실패 시 지출 기반 예상 금액을 계속 표시
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, isSummaryLocked]);
+
   // 지출 입력 폼 결제자/참여자 선택용 멤버 목록 (formInit 로드 전에는 빈 배열)
   const formMembers = formInit?.roomMembers ?? [];
 
@@ -343,19 +357,43 @@ function SettlementRoomContent({
   // 정산 실행으로 방이 잠긴 여부 (잠기면 결제내역 추가·수정·삭제, 멤버 변경 불가)
   const isLocked = expenseSummary?.isLocked ?? false;
 
-  // 내가 결제한 금액
-  const myPaidAmount = expenses
-    .filter((expense) => expense.isMyPayment)
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  // 상대별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
+  // 서버 정산 전 예상 금액이며, 지출의 결제자-참여자 관계를 상대별로 상계해 구함
+  const balanceByMember = new Map<string, number>();
+  const addBalance = (name: string, amount: number) => {
+    balanceByMember.set(name, (balanceByMember.get(name) ?? 0) + amount);
+  };
+  expenses.forEach((expense) => {
+    if (expense.isMyPayment) {
+      // 내가 결제한 지출: 다른 참여자의 부담금은 내가 받을 금액
+      expense.participantShares
+        .filter((share) => !share.isSelf)
+        .forEach((share) => addBalance(share.name, -share.shareAmount));
+      return;
+    }
 
-  // 내가 부담해야 할 금액 (서버가 1원 오차 보정까지 계산한 정확한 부담금 합산)
-  const myShareAmount = expenses.reduce((sum, expense) => {
+    // 다른 사람이 결제한 지출: 내 부담금은 결제자에게 보낼 금액
     const myShare = expense.participantShares.find((share) => share.isSelf);
-    return sum + (myShare?.shareAmount ?? 0);
-  }, 0);
+    if (myShare) {
+      addBalance(expense.payer, myShare.shareAmount);
+    }
+  });
 
-  // 내가 보낼 금액 (부담해야 할 금액이 결제한 금액보다 많을 때만 발생)
-  const myOwedAmount = Math.max(0, Math.round(myShareAmount - myPaidAmount));
+  const balances = Array.from(balanceByMember.values()).map(Math.round);
+  const estimatedSendAmount = balances
+    .filter((balance) => balance > 0)
+    .reduce((sum, balance) => sum + balance, 0);
+  const estimatedReceiveAmount = balances
+    .filter((balance) => balance < 0)
+    .reduce((sum, balance) => sum - balance, 0);
+
+  // 정산 실행 후에는 실제 송금 대상 기준인 서버 정산 값을 사용
+  const mySendAmount = mySettlement
+    ? Math.round(mySettlement.totalSendAmount)
+    : estimatedSendAmount;
+  const myReceiveAmount = mySettlement
+    ? Math.round(mySettlement.totalReceiveAmount)
+    : estimatedReceiveAmount;
 
   /**
    * 그룹 값 변경
@@ -716,10 +754,18 @@ function SettlementRoomContent({
             {totalAmount.toLocaleString()}원
           </div>
         </div>
-        <div className="flex flex-col space-y-1 items-end">
-          <div className="text-[10pt] text-[#281c18]">내가 보낼 금액</div>
-          <div className="text-xl font-bold text-[#e85a48]">
-            {myOwedAmount.toLocaleString()}원
+        <div className="flex items-start space-x-6">
+          <div className="flex flex-col space-y-1 items-end">
+            <div className="text-[10pt] text-[#281c18]">내가 보낼 금액</div>
+            <div className="text-xl font-bold text-[#e85a48]">
+              {mySendAmount.toLocaleString()}원
+            </div>
+          </div>
+          <div className="flex flex-col space-y-1 items-end">
+            <div className="text-[10pt] text-[#281c18]">내가 받을 금액</div>
+            <div className="text-xl font-bold text-[#2f9e6e]">
+              {myReceiveAmount.toLocaleString()}원
+            </div>
           </div>
         </div>
       </div>
