@@ -26,6 +26,9 @@ public class RoomDetailResponse {
     /** 방 제목 */
     private String title;
 
+    /** 입장코드 */
+    private String pin;
+
     /** 기준 통화 (예: KRW, USD) */
     private String baseCurrency;
 

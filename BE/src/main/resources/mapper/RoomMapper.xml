@@ -80,6 +80,7 @@
         <result property="slug" column="slug"/>
         <result property="title" column="title"/>
         <result property="baseCurrency" column="base_currency"/>
+        <result property="pin" column="pin"/>
 
         <!-- 멤버 목록 매핑 (Inner Class 구분용 $ 사용) -->
         <collection property="members" ofType="com.splitlink.dto.response.RoomDetailResponse$MemberResponse">
@@ -95,6 +96,7 @@
             r.slug,
             r.title,
             r.base_currency,
+            r.pin,
             m.member_id,
             m.name,
             m.is_active

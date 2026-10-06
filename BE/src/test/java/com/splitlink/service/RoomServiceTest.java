@@ -112,6 +112,7 @@ public class RoomServiceTest {
             // then
             assertThat(detailResponse).isNotNull();
             assertThat(detailResponse.getTitle()).isEqualTo("입장 테스트방");
+            assertThat(detailResponse.getPin()).isEqualTo("Pass123");
             assertThat(detailResponse.getMembers()).hasSize(2);
             assertThat(detailResponse.getMembers())
                     .extracting("active")
@@ -184,6 +185,7 @@ public class RoomServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.getTitle()).isEqualTo("수정된 방제목");
             assertThat(response.getBaseCurrency()).isEqualTo("USD");
+            assertThat(response.getPin()).isEqualTo("NewPass12");
             assertThat(response.getMembers()).extracting("name").containsExactly("지용", "대성");
         }
 
@@ -342,12 +344,16 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedResponse = roomService.updateRoom(slug, updateRequest);
 
             // then
+            assertThat(updatedResponse).isNotNull();
+            assertThat(updatedResponse.getPin()).isEqualTo("5678");
+
             RoomAccessRequest newPinAccessRequest = RoomAccessRequest.builder().pin("5678").build();
             RoomDetailResponse accessResponse = roomService.accessRoom(slug, newPinAccessRequest);
             assertThat(accessResponse).isNotNull();
+            assertThat(accessResponse.getPin()).isEqualTo("5678");
 
             RoomAccessRequest oldPinAccessRequest = RoomAccessRequest.builder().pin("1234").build();
             assertThatThrownBy(() -> roomService.accessRoom(slug, oldPinAccessRequest))
