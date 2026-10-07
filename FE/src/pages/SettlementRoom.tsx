@@ -122,7 +122,9 @@ export default function SettlementRoom() {
     // 토큰에는 roomId/memberId만 담기므로 설정 저장 후에도 기존 토큰을 그대로 사용
     // (이름이 바뀌었을 수 있으므로 memberId로 우선 찾음)
     const me =
-      savedMembers.find((member) => member.memberId === memberAccess.memberId) ??
+      savedMembers.find(
+        (member) => member.memberId === memberAccess.memberId,
+      ) ??
       savedMembers.find((member) => member.name === memberAccess.memberName);
 
     if (!me) {
@@ -262,8 +264,9 @@ function SettlementRoomContent({
       .filter(
         (
           result,
-        ): result is PromiseFulfilledResult<ExpenseDetailResponse | undefined> =>
-          result.status === "fulfilled",
+        ): result is PromiseFulfilledResult<
+          ExpenseDetailResponse | undefined
+        > => result.status === "fulfilled",
       )
       .map((result) => result.value);
 
@@ -313,10 +316,11 @@ function SettlementRoomContent({
     })();
   }, [slug, loadFormInit, loadExpenses]);
 
-  // 정산 실행으로 잠긴 방은 새로고침해도 서버 정산 결과로 보낼/받을 금액을 표시
-  const isSummaryLocked = expenseSummary?.isLocked ?? false;
+  // 정산 실행으로 방이 잠긴 여부 (잠기면 결제내역 추가·수정·삭제, 멤버 변경 불가)
+  const isLocked = expenseSummary?.isLocked ?? false;
+
   useEffect(() => {
-    if (!isSummaryLocked) {
+    if (!isLocked) {
       return;
     }
 
@@ -325,7 +329,8 @@ function SettlementRoomContent({
       try {
         const settlement = await getMySettlement(slug);
         if (!cancelled && settlement) {
-          setMySettlement(settlement);
+          // 이미 값이 있으면 덮어쓰지 않음
+          setMySettlement((prev) => prev ?? settlement);
         }
       } catch {
         // 조회 실패 시 지출 기반 예상 금액을 계속 표시
@@ -335,7 +340,7 @@ function SettlementRoomContent({
     return () => {
       cancelled = true;
     };
-  }, [slug, isSummaryLocked]);
+  }, [slug, isLocked]);
 
   // 지출 입력 폼 결제자/참여자 선택용 멤버 목록 (formInit 로드 전에는 빈 배열)
   const formMembers = formInit?.roomMembers ?? [];
@@ -353,9 +358,6 @@ function SettlementRoomContent({
   }, [formInit]);
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
-
-  // 정산 실행으로 방이 잠긴 여부 (잠기면 결제내역 추가·수정·삭제, 멤버 변경 불가)
-  const isLocked = expenseSummary?.isLocked ?? false;
 
   // 상대별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
   // 서버 정산 전 예상 금액이며, 지출의 결제자-참여자 관계를 상대별로 상계해 구함
@@ -518,7 +520,9 @@ function SettlementRoomContent({
       await loadExpenses();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "지출 목록을 불러오지 못했어요",
+        error instanceof Error
+          ? error.message
+          : "지출 목록을 불러오지 못했어요",
       );
     }
   };
@@ -533,7 +537,9 @@ function SettlementRoomContent({
       await loadExpenses();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "지출 목록을 불러오지 못했어요",
+        error instanceof Error
+          ? error.message
+          : "지출 목록을 불러오지 못했어요",
       );
     }
   };
@@ -569,7 +575,9 @@ function SettlementRoomContent({
         await executeSettlement(slug);
 
         // 서버에서 방이 이미 잠겼으므로, 이후 단계가 실패해도 재실행되지 않도록 로컬 상태를 먼저 반영
-        setExpenseSummary((prev) => (prev ? { ...prev, isLocked: true } : prev));
+        setExpenseSummary((prev) =>
+          prev ? { ...prev, isLocked: true } : prev,
+        );
 
         // 목록 새로고침 실패가 정산 내역 조회를 막지 않도록 분리
         try {
@@ -671,7 +679,9 @@ function SettlementRoomContent({
           aria-label="설정"
           onClick={() => {
             if (!formInit) {
-              toast.error("멤버 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요");
+              toast.error(
+                "멤버 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요",
+              );
               return;
             }
             setIsSettingOpen(true);
@@ -802,77 +812,77 @@ function SettlementRoomContent({
           정산이 시작되어 결제내역을 추가할 수 없어요.
         </div>
       ) : (
-      <div className="flex flex-col space-y-4 rounded-[10px] bg-white p-4">
-        <button
-          type="button"
-          className="flex items-center justify-between cursor-pointer"
-          aria-expanded={isAddExpenseOpen}
-          onClick={() => setIsAddExpenseOpen((prev) => !prev)}
-        >
-          <span className="font-bold">지출 추가</span>
-          <svg
-            className={`w-4 h-4 text-[#281c18] transition-transform ${
-              isAddExpenseOpen ? "rotate-180" : ""
-            }`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex flex-col space-y-4 rounded-[10px] bg-white p-4">
+          <button
+            type="button"
+            className="flex items-center justify-between cursor-pointer"
+            aria-expanded={isAddExpenseOpen}
+            onClick={() => setIsAddExpenseOpen((prev) => !prev)}
           >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+            <span className="font-bold">지출 추가</span>
+            <svg
+              className={`w-4 h-4 text-[#281c18] transition-transform ${
+                isAddExpenseOpen ? "rotate-180" : ""
+              }`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
-        {isAddExpenseOpen && (
-          <>
-            <div className="flex justify-end">
+          {isAddExpenseOpen && (
+            <>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="text-[10pt] text-[#281c18] cursor-pointer"
+                  onClick={handleReset}
+                >
+                  초기화
+                </button>
+              </div>
+
+              <div className="flex flex-col space-y-4">
+                {groups.map((group, groupIndex) => (
+                  <ExpenseForm
+                    key={group.id}
+                    index={groupIndex + 1}
+                    group={group}
+                    members={formMembers}
+                    onChange={(next) => handleGroupChange(groupIndex, next)}
+                    onRemove={
+                      groups.length > 1
+                        ? () => handleGroupRemove(groupIndex)
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+
               <button
                 type="button"
-                className="text-[10pt] text-[#281c18] cursor-pointer"
-                onClick={handleReset}
+                className="w-full rounded-[10px] border border-dashed border-[#e6dfd9] py-2.5 text-[10pt] font-semibold text-[#281c18] cursor-pointer"
+                onClick={handleAddGroup}
               >
-                초기화
+                + 새 결제자 · 날짜로 그룹 추가
               </button>
-            </div>
 
-            <div className="flex flex-col space-y-4">
-              {groups.map((group, groupIndex) => (
-                <ExpenseForm
-                  key={group.id}
-                  index={groupIndex + 1}
-                  group={group}
-                  members={formMembers}
-                  onChange={(next) => handleGroupChange(groupIndex, next)}
-                  onRemove={
-                    groups.length > 1
-                      ? () => handleGroupRemove(groupIndex)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="w-full rounded-[10px] border border-dashed border-[#e6dfd9] py-2.5 text-[10pt] font-semibold text-[#281c18] cursor-pointer"
-              onClick={handleAddGroup}
-            >
-              + 새 결제자 · 날짜로 그룹 추가
-            </button>
-
-            <Button
-              title={isSubmiting ? "추가 중..." : "추가하기"}
-              bgColor="#000"
-              textColor="#fff"
-              className="w-full rounded-[10px]"
-              disabled={!isValid || isSubmiting || !formInit}
-              onClick={handleSubmit}
-            />
-          </>
-        )}
-      </div>
+              <Button
+                title={isSubmiting ? "추가 중..." : "추가하기"}
+                bgColor="#000"
+                textColor="#fff"
+                className="w-full rounded-[10px]"
+                disabled={!isValid || isSubmiting || !formInit}
+                onClick={handleSubmit}
+              />
+            </>
+          )}
+        </div>
       )}
 
       <Button
