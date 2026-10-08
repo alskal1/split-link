@@ -15,6 +15,8 @@
         payer_id,
         title,
         amount,
+        bank_name,
+        account_number,
         currency,
         fx_rate,
         spent_at
@@ -23,6 +25,8 @@
         #{payerId},
         #{title},
         #{amount},
+        #{bankName},
+        #{accountNumber},
         #{currency},
         #{fxRate},
         #{spentAt}

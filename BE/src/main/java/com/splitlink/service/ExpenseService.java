@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
@@ -37,6 +38,7 @@ public class ExpenseService {
     private final ExpenseMapper expenseMapper;
     private final SettlementMapper settlementMapper;
     private final RoomAccessValidator roomAccessValidator;
+    private final EncryptionUtil encryptionUtil;
 
     /**
      * 지출 입력 폼 초기화에 필요한 데이터 조회 (계좌 정보 + 방 멤버 목록)
@@ -111,8 +113,13 @@ public class ExpenseService {
         // 결제자 그룹 단위 처리
         for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {
 
+            // 계좌번호 암호화 진행
+            String encryptedAccount = encryptionUtil.encrypt(group.getAccountNumber());
+
+            log.info("원래 계좌번호: {}, 변경된 계좌번호: {}", group.getAccountNumber(), encryptedAccount);
+
             // 결제자 최신 계좌번호 업데이트
-            memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), group.getAccountNumber());
+            memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), encryptedAccount);
 
             // TODO: [환율] 추후 다국어/외화 결제 지원 시 고도화 예정 (현재 원화 KRW 1.0 고정)
             // 통화 및 환율 세팅 (원화 전용)
@@ -127,6 +134,8 @@ public class ExpenseService {
                         .payerId(group.getPayerId())
                         .title(item.getTitle())
                         .amount(item.getAmount())
+                        .bankName(group.getBankName())
+                        .accountNumber(encryptedAccount)
                         .currency(currency)
                         .fxRate(fxRate)
                         .spentAt(group.getSpentAt())
