@@ -22,6 +22,8 @@ public class ExpenseUpdateFormResponse {
     private Long expenseId;
     private String title;
     private BigDecimal amount;
+    private String bankName;
+    private String accountNumber;
     private String currency;
     private LocalDateTime spentAt;
 

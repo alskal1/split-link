@@ -118,6 +118,8 @@
             expense_id AS expenseId,
             title,
             amount,
+            bank_name,
+            account_number,
             currency,
             spent_at AS spentAt,
             payer_id AS payerId

@@ -62,6 +62,15 @@ public class ExpenseService {
             defaultAccount = null;
         }
 
+        // defaultAccount가 존재하고 계좌번호가 있다면 복호화 진행
+        if (defaultAccount != null && defaultAccount.getAccountNumber() != null) {
+            String decryptedAccount = encryptionUtil.decrypt(defaultAccount.getAccountNumber());
+            defaultAccount = ExpenseFormInitResponse.AccountInfo.builder()
+                    .bankName(defaultAccount.getBankName())
+                    .accountNumber(decryptedAccount)
+                    .build();
+        }
+
         // 해당 방에 속한 전체 멤버 목록 조회
         List<ExpenseFormInitResponse.MemberInfo> roomMembers = memberMapper.findRoomMembersBySlug(slug, memberId);
 
@@ -251,6 +260,9 @@ public class ExpenseService {
         List<ExpenseDetailResponse.TargetMemberDetail> targetMembers =
                 expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId);
 
+        // DB에서 조회해온 암호화된 계좌번호 복호화
+        String decryptedAccount = encryptionUtil.decrypt(detail.getAccountNumber());
+
         // 참여자 목록을 세팅하여 최종 DTO 반환
         return ExpenseDetailResponse.builder()
                 .expenseId(detail.getExpenseId())
@@ -262,7 +274,7 @@ public class ExpenseService {
                 .payerId(detail.getPayerId())
                 .payerName(detail.getPayerName())
                 .bankName(detail.getBankName())
-                .accountNumber(detail.getAccountNumber())
+                .accountNumber(decryptedAccount)
                 .isMyPayment(detail.isMyPayment())
                 .targetMembers(targetMembers)
                 .build();
@@ -290,6 +302,9 @@ public class ExpenseService {
         ExpenseUpdateFormResponse form = expenseMapper.findExpenseUpdateFormById(expenseId, roomId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
 
+        // expenses 테이블의 암호화된 계좌번호 복호화
+        String decryptedAccount = encryptionUtil.decrypt(form.getAccountNumber());
+
         // 지출에 선택되어 있던 참여자 ID 목록 조회
         List<Long> targetMemberIds = expenseMapper.findTargetMemberIdsByExpenseId(expenseId);
 
@@ -311,6 +326,8 @@ public class ExpenseService {
                 .title(form.getTitle())
                 .amount(form.getAmount())
                 .currency(form.getCurrency())
+                .bankName(form.getBankName())
+                .accountNumber(decryptedAccount)
                 .spentAt(form.getSpentAt())
                 .payerId(form.getPayerId())
                 .targetMemberIds(targetMemberIds)
