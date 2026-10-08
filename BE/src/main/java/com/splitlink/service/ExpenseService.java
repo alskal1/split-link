@@ -349,6 +349,12 @@ public class ExpenseService {
         requestMemberIds.add(request.getPayerId());
         roomAccessValidator.validateMembersInRoom(roomId, new ArrayList<>(requestMemberIds));
 
+        // 계좌번호 암호화
+        String encryptedAccount = encryptionUtil.encrypt(request.getAccountNumber());
+
+        // members 테이블 결제자 최신 계좌정보 업데이트
+        memberMapper.updateAccountInfo(request.getPayerId(), request.getBankName(), encryptedAccount);
+
         // 메인 지출 데이터 수정
         int updatedRows = expenseMapper.updateExpense(
                 expenseId,
@@ -356,6 +362,8 @@ public class ExpenseService {
                 request.getPayerId(),
                 request.getTitle(),
                 request.getAmount(),
+                request.getBankName(),
+                encryptedAccount,
                 request.getSpentAt()
         );
         if (updatedRows == 0) {
