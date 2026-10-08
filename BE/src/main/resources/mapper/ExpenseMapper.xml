@@ -15,6 +15,8 @@
         payer_id,
         title,
         amount,
+        bank_name,
+        account_number,
         currency,
         fx_rate,
         spent_at
@@ -23,6 +25,8 @@
         #{payerId},
         #{title},
         #{amount},
+        #{bankName},
+        #{accountNumber},
         #{currency},
         #{fxRate},
         #{spentAt}
@@ -114,6 +118,8 @@
             expense_id AS expenseId,
             title,
             amount,
+            bank_name,
+            account_number,
             currency,
             spent_at AS spentAt,
             payer_id AS payerId
@@ -170,6 +176,8 @@
             payer_id = #{payerId},
             title = #{title},
             amount = #{amount},
+            bank_name = #{bankName},
+            account_number = #{accountNumber},
             spent_at = #{spentAt}
         WHERE expense_id = #{expenseId}
           AND room_id = #{roomId}

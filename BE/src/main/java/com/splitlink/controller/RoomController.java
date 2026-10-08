@@ -68,7 +68,6 @@ public class RoomController {
     /**
      * 방 수정 (제목, 기준통화, 입장코드, 멤버)
      * 해당 값을 다 가지고 오며, 멤버는 이름 리스트로만 들어온다.
-     * 이름 리스트는 전체 삭제 후 등록 진행.
      */
     @PutMapping("/{slug}")
     public ResponseEntity<ApiResponse<RoomDetailResponse>> updateRoom(

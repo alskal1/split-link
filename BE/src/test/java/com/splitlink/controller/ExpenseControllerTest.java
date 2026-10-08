@@ -595,6 +595,8 @@ public class ExpenseControllerTest {
                     .payerId(expectedMemberId)
                     .title("수정된 저녁 식사")
                     .amount(new BigDecimal("50000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 19, 0))
                     .targetMemberIds(List.of(100L, 101L))
                     .build();
@@ -658,6 +660,8 @@ public class ExpenseControllerTest {
                     .payerId(expectedMemberId)
                     .title("수정된 저녁 식사")
                     .amount(new BigDecimal("50000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 19, 0))
                     .targetMemberIds(List.of(100L, 101L))
                     .build();
@@ -692,6 +696,8 @@ public class ExpenseControllerTest {
                     .payerId(expectedMemberId)
                     .title("저녁 식사")
                     .amount(new BigDecimal("30000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
                     .spentAt(LocalDateTime.now())
                     .targetMemberIds(List.of(100L, 100L, 101L)) // 중복 ID 포함
                     .build();
