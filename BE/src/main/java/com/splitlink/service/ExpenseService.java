@@ -125,8 +125,6 @@ public class ExpenseService {
             // 계좌번호 암호화 진행
             String encryptedAccount = encryptionUtil.encrypt(group.getAccountNumber());
 
-            log.info("원래 계좌번호: {}, 변경된 계좌번호: {}", group.getAccountNumber(), encryptedAccount);
-
             // 결제자 최신 계좌번호 업데이트
             memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), encryptedAccount);
 
