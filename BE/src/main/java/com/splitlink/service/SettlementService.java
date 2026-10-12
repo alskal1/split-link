@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.util.RemittanceLinkGenerator;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.MemberNetBalanceDto;
@@ -34,6 +35,7 @@ public class SettlementService {
     private final ExpenseMapper expenseMapper;
     private final RoomAccessValidator roomAccessValidator;
     private final RemittanceLinkGenerator remittanceLinkGenerator; // 송금 딥링크 유틸리티
+    private final EncryptionUtil encryptionUtil;
 
     /**
      * 정산 실행 (방 잠금 + 최소 송금 알고리즘 계산 + 정산 내역 일괄 저장)
@@ -88,9 +90,17 @@ public class SettlementService {
         // SendItem 내 토스 송금 딥링크(remittanceLink) 가공 세팅
         if (sendList != null && !sendList.isEmpty()) {
             sendList.forEach(item -> {
+
+                // DB에서 꺼내온 암호화 계좌번호 복호화
+                String decryptedAccount = encryptionUtil.decrypt(item.getAccountNumber());
+
+                // 응답 DTO의 계좌번호 필드를 평문으로 교체
+                item.setAccountNumber(decryptedAccount);
+
+                // 복호화된 계좌번호로 딥링크 생성
                 String link = remittanceLinkGenerator.generateTossLink(
                         item.getBankName(),
-                        item.getAccountNumber(),
+                        decryptedAccount,
                         item.getAmount()
                 );
                 item.setRemittanceLink(link);

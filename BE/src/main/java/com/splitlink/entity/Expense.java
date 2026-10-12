@@ -19,6 +19,8 @@ public class Expense {
     private Long payerId;
     private String title;
     private BigDecimal amount;
+    private String bankName;
+    private String accountNumber;
     private String currency;
     private BigDecimal fxRate;
     private LocalDateTime spentAt;

@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
@@ -37,6 +38,7 @@ public class ExpenseService {
     private final ExpenseMapper expenseMapper;
     private final SettlementMapper settlementMapper;
     private final RoomAccessValidator roomAccessValidator;
+    private final EncryptionUtil encryptionUtil;
 
     /**
      * 지출 입력 폼 초기화에 필요한 데이터 조회 (계좌 정보 + 방 멤버 목록)
@@ -58,6 +60,15 @@ public class ExpenseService {
         // 회원은 존재하나 계좌 등록을 안한 경우 (bank_name이 null) DTO를 null로 치환하여 전달
         if (defaultAccount != null && defaultAccount.getBankName() == null) {
             defaultAccount = null;
+        }
+
+        // defaultAccount가 존재하고 계좌번호가 있다면 복호화 진행
+        if (defaultAccount != null && defaultAccount.getAccountNumber() != null) {
+            String decryptedAccount = encryptionUtil.decrypt(defaultAccount.getAccountNumber());
+            defaultAccount = ExpenseFormInitResponse.AccountInfo.builder()
+                    .bankName(defaultAccount.getBankName())
+                    .accountNumber(decryptedAccount)
+                    .build();
         }
 
         // 해당 방에 속한 전체 멤버 목록 조회
@@ -111,8 +122,11 @@ public class ExpenseService {
         // 결제자 그룹 단위 처리
         for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {
 
+            // 계좌번호 암호화 진행
+            String encryptedAccount = encryptionUtil.encrypt(group.getAccountNumber());
+
             // 결제자 최신 계좌번호 업데이트
-            memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), group.getAccountNumber());
+            memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), encryptedAccount);
 
             // TODO: [환율] 추후 다국어/외화 결제 지원 시 고도화 예정 (현재 원화 KRW 1.0 고정)
             // 통화 및 환율 세팅 (원화 전용)
@@ -127,6 +141,8 @@ public class ExpenseService {
                         .payerId(group.getPayerId())
                         .title(item.getTitle())
                         .amount(item.getAmount())
+                        .bankName(group.getBankName())
+                        .accountNumber(encryptedAccount)
                         .currency(currency)
                         .fxRate(fxRate)
                         .spentAt(group.getSpentAt())
@@ -242,6 +258,9 @@ public class ExpenseService {
         List<ExpenseDetailResponse.TargetMemberDetail> targetMembers =
                 expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId);
 
+        // DB에서 조회해온 암호화된 계좌번호 복호화
+        String decryptedAccount = encryptionUtil.decrypt(detail.getAccountNumber());
+
         // 참여자 목록을 세팅하여 최종 DTO 반환
         return ExpenseDetailResponse.builder()
                 .expenseId(detail.getExpenseId())
@@ -253,7 +272,7 @@ public class ExpenseService {
                 .payerId(detail.getPayerId())
                 .payerName(detail.getPayerName())
                 .bankName(detail.getBankName())
-                .accountNumber(detail.getAccountNumber())
+                .accountNumber(decryptedAccount)
                 .isMyPayment(detail.isMyPayment())
                 .targetMembers(targetMembers)
                 .build();
@@ -281,6 +300,9 @@ public class ExpenseService {
         ExpenseUpdateFormResponse form = expenseMapper.findExpenseUpdateFormById(expenseId, roomId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
 
+        // expenses 테이블의 암호화된 계좌번호 복호화
+        String decryptedAccount = encryptionUtil.decrypt(form.getAccountNumber());
+
         // 지출에 선택되어 있던 참여자 ID 목록 조회
         List<Long> targetMemberIds = expenseMapper.findTargetMemberIdsByExpenseId(expenseId);
 
@@ -302,6 +324,8 @@ public class ExpenseService {
                 .title(form.getTitle())
                 .amount(form.getAmount())
                 .currency(form.getCurrency())
+                .bankName(form.getBankName())
+                .accountNumber(decryptedAccount)
                 .spentAt(form.getSpentAt())
                 .payerId(form.getPayerId())
                 .targetMemberIds(targetMemberIds)
@@ -340,6 +364,12 @@ public class ExpenseService {
         requestMemberIds.add(request.getPayerId());
         roomAccessValidator.validateMembersInRoom(roomId, new ArrayList<>(requestMemberIds));
 
+        // 계좌번호 암호화
+        String encryptedAccount = encryptionUtil.encrypt(request.getAccountNumber());
+
+        // members 테이블 결제자 최신 계좌정보 업데이트
+        memberMapper.updateAccountInfo(request.getPayerId(), request.getBankName(), encryptedAccount);
+
         // 메인 지출 데이터 수정
         int updatedRows = expenseMapper.updateExpense(
                 expenseId,
@@ -347,6 +377,8 @@ public class ExpenseService {
                 request.getPayerId(),
                 request.getTitle(),
                 request.getAmount(),
+                request.getBankName(),
+                encryptedAccount,
                 request.getSpentAt()
         );
         if (updatedRows == 0) {

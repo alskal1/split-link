@@ -66,6 +66,8 @@ public interface ExpenseMapper {
                       @Param("payerId") Long payerId,
                       @Param("title") String title,
                       @Param("amount") BigDecimal amount,
+                      @Param("bankName") String bankName,
+                      @Param("accountNumber") String accountNumber,
                       @Param("spentAt") LocalDateTime spentAt);
 
     /** 특정 지출의 기존 부담금(expense_shares) 일괄 삭제 */

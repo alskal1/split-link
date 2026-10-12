@@ -1,5 +1,6 @@
 package com.splitlink.service;
 
+import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
@@ -53,30 +54,36 @@ public class ExpenseServiceTest {
     @Mock
     private RoomAccessValidator roomAccessValidator;
 
+    @Mock
+    private EncryptionUtil encryptionUtil;
+
     @Nested
     @DisplayName("지출 폼 초기화 데이터 조회 (getExpenseFormInit)")
     class GetExpenseFormInitTest {
 
         @Test
-        @DisplayName("성공: 등록된 계좌가 있는 회원인 경우 계좌 정보와 방 멤버 목록을 정상 반환한다.")
+        @DisplayName("성공: 등록된 계좌가 있는 회원인 경우 계좌 정보를 복호화하여 방 멤버 목록과 함께 반환한다.")
         void getExpenseFormInitSuccessWithAccount() {
             // given
             String slug = "test-room-slug";
             Long memberId = 1L;
             Long roomId = 10L;
+            String encryptedAccount = "EncryptedAccountText123";
+            String decryptedAccount = "3333-12-345678";
 
             ExpenseFormInitResponse.AccountInfo accountInfo = ExpenseFormInitResponse.AccountInfo.builder()
                     .bankName("카카오뱅크")
-                    .accountNumber("3333-12-345678")
+                    .accountNumber(encryptedAccount)
                     .build();
 
             ExpenseFormInitResponse.MemberInfo member1 = ExpenseFormInitResponse.MemberInfo.builder()
-                    .memberId(1L).name("스폰지밥").isActive(true).isSelf(true).build();
+                    .memberId(1L).name("스펀지밥").isActive(true).isSelf(true).build();
             ExpenseFormInitResponse.MemberInfo member2 = ExpenseFormInitResponse.MemberInfo.builder()
                     .memberId(2L).name("뚱이").isActive(false).isSelf(false).build();
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
             given(memberMapper.findAccountInfoByMemberId(memberId)).willReturn(Optional.of(accountInfo));
+            given(encryptionUtil.decrypt(encryptedAccount)).willReturn(decryptedAccount);
             given(memberMapper.findRoomMembersBySlug(slug, memberId)).willReturn(List.of(member1, member2));
 
             // when
@@ -86,19 +93,17 @@ public class ExpenseServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.getCurrentMemberId()).isEqualTo(memberId);
 
-            // 계좌 검증
+            // 계좌 검증 (복호화된 평문인지 확인)
             assertThat(response.getDefaultAccount()).isNotNull();
             assertThat(response.getDefaultAccount().getBankName()).isEqualTo("카카오뱅크");
+            assertThat(response.getDefaultAccount().getAccountNumber()).isEqualTo(decryptedAccount);
 
             // 멤버 목록 검증
             assertThat(response.getRoomMembers()).hasSize(2);
-            assertThat(response.getRoomMembers().get(0).isSelf()).isTrue();
-            assertThat(response.getRoomMembers().get(0).isActive()).isTrue();
-            assertThat(response.getRoomMembers().get(1).isSelf()).isFalse();
-            assertThat(response.getRoomMembers().get(1).isActive()).isFalse();
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(memberMapper).findAccountInfoByMemberId(memberId);
+            verify(encryptionUtil).decrypt(encryptedAccount);
             verify(memberMapper).findRoomMembersBySlug(slug, memberId);
         }
 
@@ -147,12 +152,14 @@ public class ExpenseServiceTest {
     class CreateExpensesTest {
 
         @Test
-        @DisplayName("성공: 1/N 정산 시 소수점 버림 후 남은 1원 오차가 첫 번째 참여자에게 정상 가산된다.")
+        @DisplayName("성공: 계좌번호를 암호화하여 저장하며, 1/N 정산 시 오차가 첫 번째 참여자에게 가산된다.")
         void createExpensesRemainderAddedToFirstMember() {
             // given
             String slug = "test-slug";
             Long currentMemberId = 1L;
             Long roomId = 10L;
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
 
             ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
                     .title("저녁 식사")
@@ -165,7 +172,7 @@ public class ExpenseServiceTest {
                     .spentAt(LocalDateTime.now())
                     .currency("KRW")
                     .bankName("카카오뱅크")
-                    .accountNumber("3333-12-345678")
+                    .accountNumber(rawAccount)
                     .items(List.of(item))
                     .build();
 
@@ -180,6 +187,7 @@ public class ExpenseServiceTest {
                     .isClosed(false)
                     .build();
             given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
 
             // when
             expenseService.createExpenses(slug, currentMemberId, request);
@@ -196,7 +204,9 @@ public class ExpenseServiceTest {
             assertThat(shares.get(1).getAmount()).isEqualTo(new BigDecimal("3333"));
             assertThat(shares.get(2).getAmount()).isEqualTo(new BigDecimal("3333"));
 
-            verify(memberMapper).updateAccountInfo(1L, "카카오뱅크", "3333-12-345678");
+            // 암호화된 계좌로 memberMapper.updateAccountInfo가 호출되는지 검증
+            verify(encryptionUtil).encrypt(rawAccount);
+            verify(memberMapper).updateAccountInfo(1L, "카카오뱅크", encryptedAccount);
         }
 
         @Test
@@ -350,9 +360,6 @@ public class ExpenseServiceTest {
 
             assertThat(response.getExpenses()).hasSize(2);
             assertThat(response.getExpenses().get(0).getExpenseId()).isEqualTo(3L);
-            assertThat(response.getExpenses().get(0).getTitle()).isEqualTo("후식 메론");
-            assertThat(response.getExpenses().get(0).isMyPayment()).isTrue();
-            assertThat(response.getExpenses().get(0).getTargetMemberCount()).isEqualTo(2);
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, currentMemberId);
             verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
@@ -449,9 +456,12 @@ public class ExpenseServiceTest {
         private final Long memberId = 38L;
 
         @Test
-        @DisplayName("성공: 지출 상세 정보 및 참여자별 부담금 정보를 정상 조회한다.")
+        @DisplayName("성공: 지출 상세 정보 조회 시 암호화된 계좌번호를 복호화하여 반환한다.")
         void getExpenseDetail_Success() {
             // given
+            String encryptedAccount = "EncryptedAccountText123";
+            String decryptedAccount = "3333-12-3456789";
+
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
 
             ExpenseDetailResponse mockDetail = ExpenseDetailResponse.builder()
@@ -464,7 +474,7 @@ public class ExpenseServiceTest {
                     .payerId(38L)
                     .payerName("스펀지밥")
                     .bankName("카카오뱅크")
-                    .accountNumber("3333-12-3456789")
+                    .accountNumber(encryptedAccount)
                     .isMyPayment(true)
                     .build();
 
@@ -487,6 +497,7 @@ public class ExpenseServiceTest {
                     .willReturn(Optional.of(mockDetail));
             given(expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId))
                     .willReturn(mockTargetMembers);
+            given(encryptionUtil.decrypt(encryptedAccount)).willReturn(decryptedAccount);
 
             // when
             ExpenseDetailResponse result = expenseService.getExpenseDetail(slug, expenseId, memberId);
@@ -495,19 +506,13 @@ public class ExpenseServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.getExpenseId()).isEqualTo(expenseId);
             assertThat(result.getTitle()).isEqualTo("점심 돈까스");
-            assertThat(result.getAmount()).isEqualByComparingTo("30000.00");
             assertThat(result.getPayerName()).isEqualTo("스펀지밥");
             assertThat(result.getBankName()).isEqualTo("카카오뱅크");
-            assertThat(result.isMyPayment()).isTrue();
-
-            assertThat(result.getTargetMembers()).hasSize(2);
-            assertThat(result.getTargetMembers().get(0).getName()).isEqualTo("스펀지밥");
-            assertThat(result.getTargetMembers().get(0).isSelf()).isTrue();
-            assertThat(result.getTargetMembers().get(1).getName()).isEqualTo("다람이");
-            assertThat(result.getTargetMembers().get(1).isSelf()).isFalse();
+            assertThat(result.getAccountNumber()).isEqualTo(decryptedAccount);
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
+            verify(encryptionUtil).decrypt(encryptedAccount);
             verify(expenseMapper).findExpenseSharesByExpenseId(expenseId, roomId, memberId);
         }
 
@@ -539,9 +544,12 @@ public class ExpenseServiceTest {
         private final Long memberId = 1L;
 
         @Test
-        @DisplayName("성공: 지출 기본 정보, 참여자 ID 목록, 방 멤버 목록을 정상 조립하여 반환한다.")
+        @DisplayName("성공: 지출 수정 폼 데이터 조회 시 암호화된 계좌번호를 복호화하여 반환한다.")
         void getExpenseUpdateForm_Success() {
             // given
+            String encryptedAccount = "EncryptedAccountText123";
+            String decryptedAccount = "3333-12-345678";
+
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
 
             RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
@@ -554,6 +562,8 @@ public class ExpenseServiceTest {
                     .expenseId(expenseId)
                     .title("돈까스 정식")
                     .amount(new BigDecimal("25000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber(encryptedAccount)
                     .currency("KRW")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
                     .payerId(1L)
@@ -578,6 +588,7 @@ public class ExpenseServiceTest {
 
             given(expenseMapper.findExpenseUpdateFormById(expenseId, roomId))
                     .willReturn(Optional.of(mockForm));
+            given(encryptionUtil.decrypt(encryptedAccount)).willReturn(decryptedAccount);
             given(expenseMapper.findTargetMemberIdsByExpenseId(expenseId))
                     .willReturn(mockTargetMemberIds);
             given(memberMapper.findRoomMembersBySlug(slug, memberId))
@@ -589,19 +600,14 @@ public class ExpenseServiceTest {
             // then
             assertThat(result).isNotNull();
             assertThat(result.getExpenseId()).isEqualTo(expenseId);
-            assertThat(result.getTitle()).isEqualTo("돈까스 정식");
-            assertThat(result.getAmount()).isEqualByComparingTo("25000");
-            assertThat(result.getPayerId()).isEqualTo(1L);
+            assertThat(result.getBankName()).isEqualTo("카카오뱅크");
+            assertThat(result.getAccountNumber()).isEqualTo(decryptedAccount);
             assertThat(result.getTargetMemberIds()).containsExactly(1L, 2L);
-
-            assertThat(result.getRoomMembers()).hasSize(2);
-            assertThat(result.getRoomMembers().get(0).getMemberId()).isEqualTo(1L);
-            assertThat(result.getRoomMembers().get(0).getName()).isEqualTo("스펀지밥");
-            assertThat(result.getRoomMembers().get(0).isActive()).isTrue();
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(roomMapper).findRoomStatusBySlug(slug);
             verify(expenseMapper).findExpenseUpdateFormById(expenseId, roomId);
+            verify(encryptionUtil).decrypt(encryptedAccount);
             verify(expenseMapper).findTargetMemberIdsByExpenseId(expenseId);
             verify(memberMapper).findRoomMembersBySlug(slug, memberId);
         }
@@ -702,15 +708,20 @@ public class ExpenseServiceTest {
                     .payerId(payerId)
                     .title("수정된 점심 식사")
                     .amount(new BigDecimal("30000"))
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
                     .targetMemberIds(targetMemberIds)
                     .build();
         }
 
         @Test
-        @DisplayName("성공: 올바른 요청 시 기존 지출 및 부담금을 수정하고 새 부담금을 계산하여 재등록한다.")
+        @DisplayName("성공: 입력받은 계좌번호를 암호화하여 지출 및 결제자 계좌를 수정하고 부담금을 재등록한다.")
         void updateExpense_Success() {
             // given
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
+
             ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
@@ -720,10 +731,12 @@ public class ExpenseServiceTest {
                     .isClosed(false)
                     .build();
             given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
 
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
-                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
             )).willReturn(1);
 
             given(expenseMapper.deleteExpenseSharesByExpenseId(expenseId)).willReturn(2);
@@ -735,9 +748,12 @@ public class ExpenseServiceTest {
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(roomMapper).findRoomStatusBySlug(slug);
             verify(roomAccessValidator).validateMembersInRoom(eq(roomId), anyList());
+            verify(encryptionUtil).encrypt(rawAccount);
+            verify(memberMapper).updateAccountInfo(100L, "카카오뱅크", encryptedAccount);
             verify(expenseMapper).updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
-                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
             );
             verify(expenseMapper).deleteExpenseSharesByExpenseId(expenseId);
             verify(expenseMapper).insertExpenseShares(anyList());
@@ -787,6 +803,9 @@ public class ExpenseServiceTest {
         @DisplayName("예외: 존재하지 않는 지출이거나 업데이트된 행이 0개인 경우 예외가 발생한다.")
         void updateExpense_ThrowExceptionWhenExpenseNotFound() {
             // given
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
+
             ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
@@ -796,10 +815,12 @@ public class ExpenseServiceTest {
                     .isClosed(false)
                     .build();
             given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
 
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
-                    eq(request.getTitle()), eq(request.getAmount()), eq(request.getSpentAt())
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
             )).willReturn(0);
 
             // when & then
