@@ -64,7 +64,7 @@ public class EncryptionUtil {
             byte[] decrypted = cipher.doFinal(decodedBytes);
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException("계좌번호 복호화 중 오류가 발생했습니다.");
+            throw new RuntimeException("계좌번호 복호화 중 오류가 발생했습니다.", e);
         }
     }
 }

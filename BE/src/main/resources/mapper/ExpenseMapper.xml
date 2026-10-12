@@ -89,8 +89,8 @@
             e.spent_at AS spentAt,
             e.payer_id AS payerId,
             m.name AS payerName,
-            m.bank_name AS bankName,
-            m.account_number AS accountNumber,
+            e.bank_name AS bankName,
+            e.account_number AS accountNumber,
             CASE WHEN e.payer_id = #{memberId} THEN TRUE ELSE FALSE END AS isMyPayment
         FROM expenses e
         JOIN members m ON e.payer_id = m.member_id

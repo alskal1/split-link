@@ -16,7 +16,7 @@ CREATE TABLE members (
                          room_id BIGINT NOT NULL COMMENT '소속 방 ID',
                          name VARCHAR(50) NOT NULL COMMENT '참여자 이름(닉네임)',
                          bank_name VARCHAR(50) COMMENT '은행명',
-                         account_number VARCHAR(50) COMMENT '계좌번호',
+                         account_number VARCHAR(255) COMMENT '계좌번호(암호화)',
                          is_active BOOLEAN NOT NULL DEFAULT FALSE COMMENT '해당 방 접속 상태 여부',
                          CONSTRAINT fk_members_room FOREIGN KEY (room_id)
                              REFERENCES rooms(room_id) ON DELETE CASCADE
@@ -29,6 +29,8 @@ CREATE TABLE expenses (
                           payer_id BIGINT NOT NULL COMMENT '실제 결제한 멤버 ID',
                           title VARCHAR(100) NOT NULL COMMENT '지출 항목명',
                           amount DECIMAL(12,2) NOT NULL COMMENT '결제 금액',
+                          bank_name VARCHAR(50) NOT NULL COMMENT '은행명',
+                          account_number VARCHAR(255) NOT NULL COMMENT '계좌번호(암호화)',
                           currency VARCHAR(3) NOT NULL COMMENT '결제 화폐 단위',
                           fx_rate DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT '기준 통화로 환산하기 위한 환율',
                           spent_at TIMESTAMP NOT NULL COMMENT '지출 일시',

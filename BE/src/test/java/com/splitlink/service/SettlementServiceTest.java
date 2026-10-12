@@ -301,6 +301,45 @@ public class SettlementServiceTest {
             verifyNoInteractions(settlementMapper);
             verifyNoInteractions(remittanceLinkGenerator);
         }
+
+        @Test
+        @DisplayName("성공: 보낼 내역의 수신자 계좌번호가 null인 경우 복호화를 시도하지 않고 null을 유지한다.")
+        void getMySettlementSuccessWithNullReceiverAccount() {
+            // given
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
+                    new BigDecimal("15000"), BigDecimal.ZERO
+            );
+            given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(mockSummary);
+
+            // 계좌가 등록되지 않은 수신자(accountNumber = null)
+            RoomMySettlementResponse.SendItem sendItem = RoomMySettlementResponse.SendItem.builder()
+                    .settlementId(100L)
+                    .receiverId(2L)
+                    .receiverName("뚱이")
+                    .amount(new BigDecimal("15000"))
+                    .bankName(null)
+                    .accountNumber(null)
+                    .remittanceLink(null)
+                    .isDone(false)
+                    .build();
+
+            given(settlementMapper.findMySendSettlements(roomId, memberId)).willReturn(List.of(sendItem));
+            given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of());
+
+            // when
+            RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getSendList()).hasSize(1);
+            assertThat(response.getSendList().get(0).getAccountNumber()).isNull();
+            assertThat(response.getSendList().get(0).getRemittanceLink()).isNull();
+
+            // encryptionUtil.decrypt는 호출되지 않아야 함
+            verify(encryptionUtil, never()).decrypt(anyString());
+        }
     }
 
     @Nested

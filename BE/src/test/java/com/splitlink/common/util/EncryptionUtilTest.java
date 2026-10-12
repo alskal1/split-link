@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Slf4j
 public class EncryptionUtilTest {
@@ -59,5 +60,40 @@ public class EncryptionUtilTest {
         // then
         assertThat(encryptedNull).isNull();
         assertThat(encryptedBlank).isEqualTo(blankAccount);
+    }
+
+    @Test
+    @DisplayName("성공: null 또는 공백 문자열 입력 시 그대로 null 또는 공백을 반환한다.")
+    void encryptAndDecryptNullOrBlank() {
+        assertThat(encryptionUtil.encrypt(null)).isNull();
+        assertThat(encryptionUtil.encrypt("")).isEqualTo("");
+        assertThat(encryptionUtil.decrypt(null)).isNull();
+        assertThat(encryptionUtil.decrypt("")).isEqualTo("");
+    }
+
+    @Test
+    @DisplayName("성공: 50자 이상의 긴 계좌번호 및 하이픈/공백 포함 문자열도 정상 암복호화된다.")
+    void encryptAndDecryptLongAccountNumber() {
+        // given
+        String longAccount = "1234567890-1234567890-1234567890-1234567890-1234567890";
+
+        // when
+        String encrypted = encryptionUtil.encrypt(longAccount);
+        String decrypted = encryptionUtil.decrypt(encrypted);
+
+        // then
+        assertThat(decrypted).isEqualTo(longAccount);
+    }
+
+    @Test
+    @DisplayName("예외: 올바르지 않은 Base64 형식의 암호문 복호화 시 RuntimeException 예외가 발생한다.")
+    void decryptInvalidBase64ThrowsException() {
+        // given
+        String invalidBase64 = "Invalid-Base64-String!!!";
+
+        // when & then
+        assertThatThrownBy(() -> encryptionUtil.decrypt(invalidBase64))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("계좌번호 복호화 중 오류가 발생했습니다.");
     }
 }
