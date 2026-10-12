@@ -1,14 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 import { deleteRoom, updateRoom } from "../api/room";
-import Modal from "../components/Modal";
+import BottomSheet from "../components/BottomSheet";
 import ConfirmModal from "../components/ConfirmModal";
-import Button from "../components/Button";
-import Input from "../components/Input";
 import type { RoomMemberResponse } from "../types/roomType";
 import type { ExpenseFormMemberInfo } from "../types/expenseType";
-import xIcon from "../assets/x.svg";
 
 /**
  * 설정 모달에서 편집 중인 멤버
@@ -29,6 +26,7 @@ interface SettlementRoomSettingProps {
   pin: string;
   baseCurrency: string;
   isLocked: boolean;
+  expenseCount: number;
   onClose: () => void;
   onSaved: (
     updated: { title: string; baseCurrency: string; memberNames: string[] },
@@ -38,8 +36,6 @@ interface SettlementRoomSettingProps {
   onDeleted: () => void;
 }
 
-const INPUT_BG_COLOR = "#fdf3eb";
-
 /**
  * 결제내역 입력화면 설정 아이콘 클릭 시 뜨는 정산방 설정 모달
  * @param slug 방 슬러그
@@ -48,6 +44,7 @@ const INPUT_BG_COLOR = "#fdf3eb";
  * @param pin 기존 입장코드 (수정/삭제 권한 확인용)
  * @param baseCurrency 기준통화
  * @param isLocked 방 잠금 여부 (잠기면 참여 멤버 추가·삭제 불가)
+ * @param expenseCount 결제내역 건수 (삭제 확인 문구용)
  * @param onClose 닫기 이벤트
  * @param onSaved 저장 완료 이벤트
  * @param onDeleted 삭제 완료 이벤트
@@ -59,6 +56,7 @@ export default function SettlementRoomSetting({
   pin: initialPin,
   baseCurrency,
   isLocked,
+  expenseCount,
   onClose,
   onSaved,
   onDeleted,
@@ -83,6 +81,19 @@ export default function SettlementRoomSetting({
   const [isSubmiting, setIsSubmiting] = useState(false);
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  // 링크 복사 완료 표시 여부
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
+
+  // 복사 완료 표시를 2초 뒤 원복
+  useEffect(() => {
+    if (!isLinkCopied) {
+      return;
+    }
+
+    const timer = setTimeout(() => setIsLinkCopied(false), 2000);
+
+    return () => clearTimeout(timer);
+  }, [isLinkCopied]);
 
   // 방 링크
   const roomLink = `${window.location.origin}/rooms/${slug}`;
@@ -152,7 +163,7 @@ export default function SettlementRoomSetting({
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(roomLink);
-      toast.success("링크가 복사됐어요");
+      setIsLinkCopied(true);
     } catch (error) {
       toast.error("링크 복사에 실패했어요");
     }
@@ -242,25 +253,50 @@ export default function SettlementRoomSetting({
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border-[1.5px] border-line bg-white px-3.5 py-3 text-[15px] outline-none placeholder:text-[#b5b3ad] focus:border-brand disabled:opacity-50";
+  const labelClass = "mb-2 text-xs font-bold text-ink-soft";
+
   return (
     <>
-      <Modal title="정산방 설정" onClose={onClose}>
-        <div className="flex flex-col space-y-2">
-          <div className="font-bold">모임 이름</div>
-          <Input
-            className="w-full"
-            bgColor={INPUT_BG_COLOR}
+      <BottomSheet
+        title="정산방 설정"
+        onClose={onClose}
+        footer={
+          <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+            <button
+              type="button"
+              className="cursor-pointer rounded-[14px] border-[1.5px] border-line bg-transparent p-3.5 text-sm font-bold text-danger disabled:opacity-50"
+              disabled={isSubmiting}
+              onClick={() => setIsDeleteConfirmOpen(true)}
+            >
+              정산방 삭제
+            </button>
+            <button
+              type="button"
+              className="cursor-pointer rounded-[14px] bg-ink p-3.5 text-sm font-extrabold text-white disabled:opacity-50"
+              disabled={isSubmiting}
+              onClick={handleSave}
+            >
+              {isSubmiting ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        }
+      >
+        <div className="mb-[18px]">
+          <div className={labelClass}>모임 이름</div>
+          <input
+            className={`${inputClass} font-semibold`}
             value={roomName}
             onChange={(e) => setRoomName(e.target.value)}
             maxLength={100}
           />
         </div>
 
-        <div className="flex flex-col space-y-2">
-          <div className="font-bold">입장코드</div>
-          <Input
-            className="w-full font-bold"
-            bgColor={INPUT_BG_COLOR}
+        <div className="mb-[18px]">
+          <div className={labelClass}>입장코드</div>
+          <input
+            className={`${inputClass} font-mono font-extrabold tracking-[0.15em]`}
             placeholder="입장코드"
             value={pin}
             onChange={handlePinChange}
@@ -268,101 +304,95 @@ export default function SettlementRoomSetting({
           />
         </div>
 
-        <div className="flex flex-col space-y-2">
-          <div className="font-bold">참여 멤버</div>
+        <div className="mb-[18px]">
+          <div className={labelClass}>참여 멤버</div>
           {members.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
               {members.map((member) => (
                 <div
                   key={member.key}
-                  className="flex items-center gap-2 rounded-full pl-3 pr-1.5 py-1.5 badge-brand"
+                  className="flex items-center gap-1 rounded-full bg-white py-1.5 pr-1.5 pl-3.5 text-sm font-semibold"
                 >
-                  <span className="font-semibold">{member.name}</span>
+                  {member.name}
                   <button
                     type="button"
-                    className="w-5 h-5 flex items-center justify-center rounded-full bg-[#c53829] cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default"
+                    className="flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-full text-ink-faint disabled:cursor-default disabled:opacity-40"
                     disabled={isLocked}
                     onClick={() => handleRemoveMember(member.key)}
                     aria-label={`${member.name} 삭제`}
                   >
-                    <img src={xIcon} alt="삭제" className="w-2.5 h-2.5" />
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    >
+                      <path d="M18 6 6 18" />
+                      <path d="m6 6 12 12" />
+                    </svg>
                   </button>
                 </div>
               ))}
             </div>
           )}
-          <div className="flex items-center space-x-2">
-            <Input
-              className="flex-1"
-              bgColor={INPUT_BG_COLOR}
-              placeholder="이름 입력 후 추가"
+          <div className="flex gap-2">
+            <input
+              className={`${inputClass} min-w-0 flex-1`}
+              placeholder="이름 입력"
               value={memberInput}
               onChange={(e) => setMemberInput(e.target.value)}
               onKeyDown={handleMemberInputKeyDown}
               maxLength={50}
               disabled={isLocked}
             />
-            <Button
-              title="추가"
-              bgColor="#000"
-              textColor="#fff"
-              className="rounded-[10px]"
+            <button
+              type="button"
+              className="cursor-pointer rounded-xl bg-ink px-[18px] text-sm font-bold text-white disabled:opacity-50"
               disabled={isLocked}
               onClick={handleAddMember}
-            />
+            >
+              추가
+            </button>
           </div>
           {isLocked && (
-            <div className="explain-text">
+            <div className="mt-2 text-xs text-ink-soft">
               정산이 시작되어 멤버를 변경할 수 없어요.
             </div>
           )}
         </div>
 
-        <div className="flex flex-col space-y-2">
-          <div className="font-bold">방 링크</div>
-          <div className="flex items-center space-x-2">
-            <div
-              className="min-w-0 flex-1 truncate rounded-[10px] border border-[#e6dfd9] p-2 text-[10pt]"
-              style={{ backgroundColor: INPUT_BG_COLOR }}
-            >
+        <div>
+          <div className={labelClass}>방 링크</div>
+          <div className="flex items-center gap-2.5 rounded-xl bg-white py-2 pr-2 pl-3.5">
+            <div className="min-w-0 flex-1 truncate text-sm font-semibold">
               {roomLink}
             </div>
-            <Button
-              title="복사"
-              bgColor="#000"
-              textColor="#fff"
-              className="rounded-[10px]"
+            <button
+              type="button"
+              className={`shrink-0 cursor-pointer rounded-[9px] px-3.5 py-2 text-[13px] font-bold text-white transition-colors ${
+                isLinkCopied ? "bg-brand" : "bg-ink"
+              }`}
               onClick={handleCopyLink}
-            />
+            >
+              {isLinkCopied ? "✓ 복사됨" : "복사"}
+            </button>
           </div>
         </div>
-
-        <hr className="border-[#e6dfd9]" />
-
-        <div className="flex items-center space-x-3">
-          <Button
-            title="정산방 삭제"
-            textColor="#c53829"
-            bgColor="#fff"
-            className="flex-1 rounded-[10px] border border-[#c53829]"
-            disabled={isSubmiting}
-            onClick={() => setIsDeleteConfirmOpen(true)}
-          />
-          <Button
-            title={isSubmiting ? "저장 중..." : "저장"}
-            bgColor="#000"
-            textColor="#fff"
-            className="flex-1 rounded-[10px]"
-            disabled={isSubmiting}
-            onClick={handleSave}
-          />
-        </div>
-      </Modal>
+      </BottomSheet>
       {isDeleteConfirmOpen && (
         <ConfirmModal
-          title="정산방 삭제"
-          message="정산방을 삭제할까요? 되돌릴 수 없어요."
+          title="정산방을 삭제할까요?"
+          message={
+            expenseCount > 0
+              ? `결제내역 ${expenseCount}건이 모두 사라지고 되돌릴 수 없어요.`
+              : "되돌릴 수 없어요."
+          }
           confirmText="삭제"
+          variant="danger"
+          disabled={isSubmiting}
           onConfirm={handleDeleteRoom}
           onCancel={() => setIsDeleteConfirmOpen(false)}
         />

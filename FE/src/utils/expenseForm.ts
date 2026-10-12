@@ -33,3 +33,12 @@ export const createEmptyExpenseGroup = (
   accountNumber: "",
   items: [createEmptyExpenseItem(members)],
 });
+
+/**
+ * 로컬 시간 기준 yyyy-mm-dd 문자열 변환
+ * @param date 변환할 날짜
+ */
+export const toLocalIso = (date: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};

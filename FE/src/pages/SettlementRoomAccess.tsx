@@ -3,14 +3,12 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { accessRoom, getRoomSummary, selectMember } from "../api/room";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import toast from "react-hot-toast";
-import Button from "../components/Button";
-import Input from "../components/Input";
+import { AVATAR_PALETTE, PAGE_FONT_FAMILY } from "../constants/avatar";
 import {
   loadMemberAccess,
   saveMemberAccess,
 } from "../utils/memberAccessStorage";
 import type { RoomMemberResponse } from "../types/roomType";
-import checkIcon from "../assets/check.svg";
 
 export default function SettlementRoomAccess() {
   const { slug } = useParams<{ slug: string }>();
@@ -200,91 +198,164 @@ export default function SettlementRoomAccess() {
     return null;
   }
 
-  if (step === "select-member") {
-    return (
-      <div className="flex flex-col items-center flex-1 text-center space-y-8 justify-center">
-        <div className="w-20 h-20 flex items-center justify-center rounded-full badge-brand">
-          <img src={checkIcon} alt="" className="w-9 h-9" />
-        </div>
-
-        <div className="flex flex-col space-y-2">
-          <div className="text-2xl font-bold">{title}</div>
-          <div className="explain-text">참여 멤버 중 본인을 선택해주세요</div>
-        </div>
-
-        <div className="w-full flex flex-col space-y-3">
-          {members.map((member) => {
-            const isSelected = selectedMemberId === member.memberId;
-
-            return (
-              <button
-                key={member.memberId}
-                type="button"
-                className={`w-full flex items-center justify-between rounded-2xl p-4 text-left border ${
-                  member.isActive
-                    ? "bg-gray border-[#e6dfd9] cursor-not-allowed"
-                    : isSelected
-                      ? "bg-[#ffdcd4] border-[#c53829] cursor-pointer"
-                      : "bg-white border-[#e6dfd9] cursor-pointer"
-                }`}
-                disabled={member.isActive}
-                onClick={() => setSelectedMemberId(member.memberId)}
-              >
-                <span className="font-bold">{member.name}</span>
-                {member.isActive ? (
-                  <span className="text-[10pt] text-[#9c8f86]">참여중</span>
-                ) : (
-                  <span
-                    className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isSelected ? "bg-[#c53829]" : "border-2 border-[#e6dfd9]"
-                    }`}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <Button
-          title={isSubmiting ? "이동 중..." : "정산방 들어가기"}
-          bgColor="#e85a48"
-          textColor="#fff"
-          className="w-full rounded-2xl h-12.5"
-          disabled={selectedMemberId === null || isSubmiting}
-          onClick={handleEnterRoom}
-        />
-      </div>
-    );
-  }
+  const selectedName =
+    members.find((m) => m.memberId === selectedMemberId)?.name ?? null;
+  const canEnter = selectedMemberId !== null && !isSubmiting;
 
   return (
-    <div className="flex flex-col items-center flex-1 text-center space-y-8 justify-center">
-      <div className="flex flex-col space-y-2">
-        <div className="font-bold text-[#c53829]">모임정산 초대</div>
-        <div className="text-2xl font-bold">{title}</div>
-        <div className="explain-text">
-          방장에게 받은 입장코드를 입력해주세요
-        </div>
+    <div
+      className={`min-h-screen bg-paper text-ink break-keep ${PAGE_FONT_FAMILY}`}
+    >
+      <div className="mx-auto max-w-[520px] px-5 pb-[140px]">
+        <header className="flex h-16 items-center justify-center">
+          <div className="max-w-[60%] truncate text-sm font-bold text-ink-soft">
+            {title}
+          </div>
+        </header>
+
+        {step === "select-member" ? (
+          <>
+            <div className="animate-[sl-up_0.45s_ease_both] pt-5 pb-7">
+              <h1 className="mb-2.5 text-[length:clamp(28px,7.5vw,36px)] leading-[1.2] font-extrabold tracking-[-0.045em]">
+                어떤 멤버로
+                <br />
+                입장할까요?
+              </h1>
+              <p className="text-[15px] leading-[1.6] text-ink-soft">
+                선택한 이름 기준으로 내가 보낼 돈, 받을 돈이 표시돼요.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {members.map((member, i) => {
+                const isSelected = selectedMemberId === member.memberId;
+                const [bg, color] = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
+
+                return (
+                  <button
+                    key={member.memberId}
+                    type="button"
+                    disabled={member.isActive}
+                    onClick={() => setSelectedMemberId(member.memberId)}
+                    style={{ animationDelay: `${i * 50}ms` }}
+                    className={`flex w-full animate-[sl-up_0.4s_ease_both] items-center gap-3.5 rounded-2xl border-[1.5px] px-4 py-3.5 text-left transition-[background-color,border-color] duration-200 active:scale-[0.98] ${
+                      member.isActive
+                        ? "cursor-not-allowed border-transparent bg-white/40"
+                        : isSelected
+                          ? "cursor-pointer border-brand bg-white"
+                          : "cursor-pointer border-transparent bg-white/55"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-extrabold ${
+                        member.isActive ? "opacity-50" : ""
+                      }`}
+                      style={{ backgroundColor: bg, color }}
+                    >
+                      {member.name.slice(0, 1)}
+                    </span>
+                    <span
+                      className={`flex-1 text-base font-bold ${
+                        member.isActive ? "text-ink-faint" : "text-ink"
+                      }`}
+                    >
+                      {member.name}
+                    </span>
+                    {member.isActive ? (
+                      <span className="text-[13px] font-semibold text-ink-faint">
+                        참여중
+                      </span>
+                    ) : (
+                      <span
+                        className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 transition-[background-color,border-color] duration-200 ${
+                          isSelected
+                            ? "border-brand bg-brand"
+                            : "border-[#d3d1cb] bg-transparent"
+                        }`}
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#fff"
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="animate-[sl-up_0.45s_ease_both] pt-5 pb-7">
+              <div className="mb-2 text-sm font-bold text-brand">
+                모임정산 초대
+              </div>
+              <h1 className="mb-2.5 text-[length:clamp(28px,7.5vw,36px)] leading-[1.2] font-extrabold tracking-[-0.045em]">
+                {title}
+              </h1>
+              <p className="text-[15px] leading-[1.6] text-ink-soft">
+                방장에게 받은 입장코드를 입력해주세요.
+              </p>
+            </div>
+            <input
+              value={pin}
+              onChange={handlePinChange}
+              onKeyDown={handleKeyDown}
+              placeholder="입장코드"
+              maxLength={10}
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full rounded-[14px] border-[1.5px] border-line bg-white px-[18px] py-4 text-center font-mono text-xl font-bold tracking-[0.18em] transition-colors outline-none placeholder:text-base placeholder:font-normal placeholder:tracking-normal placeholder:text-[#b5b3ad] focus:border-brand"
+            />
+          </>
+        )}
       </div>
 
-      <Input
-        className="w-full text-center font-bold"
-        height="56px"
-        placeholder="입장코드"
-        value={pin}
-        onChange={handlePinChange}
-        onKeyDown={handleKeyDown}
-        maxLength={10}
-      />
-
-      <Button
-        title="확인"
-        bgColor="#000"
-        textColor="#fff"
-        className="w-full rounded-2xl h-12.5"
-        disabled={pin?.length < 4 || isSubmiting}
-        onClick={handleSubmit}
-      />
+      {/* 하단 고정 버튼 */}
+      <div className="fixed right-0 bottom-0 left-0 z-20 bg-gradient-to-t from-paper from-70% to-paper/0 px-5 pt-5 pb-[calc(16px+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-[480px]">
+          {step === "select-member" ? (
+            <button
+              type="button"
+              disabled={!canEnter}
+              onClick={handleEnterRoom}
+              className={`block w-full rounded-[14px] py-[18px] text-center text-base font-extrabold text-white transition-[background-color,transform] duration-200 active:scale-[0.98] ${
+                canEnter
+                  ? "cursor-pointer bg-ink"
+                  : "cursor-not-allowed bg-[#c9c7c1]"
+              }`}
+            >
+              {isSubmiting
+                ? "이동 중..."
+                : selectedName
+                  ? `${selectedName}(으)로 입장`
+                  : "멤버를 선택해주세요"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pin.length < 4 || isSubmiting}
+              onClick={handleSubmit}
+              className={`block w-full rounded-[14px] py-[18px] text-center text-base font-extrabold text-white transition-[background-color,transform] duration-200 active:scale-[0.98] ${
+                pin.length < 4 || isSubmiting
+                  ? "cursor-not-allowed bg-[#c9c7c1]"
+                  : "cursor-pointer bg-ink"
+              }`}
+            >
+              확인
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

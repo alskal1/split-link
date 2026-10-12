@@ -1,5 +1,5 @@
 import { BANK_OPTIONS } from "../constants/bank";
-import { CURRENCY_OPTIONS } from "../constants/currency";
+import { BASE_CURRENCY_CARDS } from "../constants/currency";
 import { createEmptyExpenseItem } from "../utils/expenseForm";
 import type {
   ExpenseFormMemberInfo,
@@ -132,7 +132,7 @@ export default function ExpenseForm({
 
         {group.isOverseas && (
           <Select
-            options={CURRENCY_OPTIONS.filter((opt) => opt.value !== "ETC")}
+            options={BASE_CURRENCY_CARDS.filter((opt) => opt.value !== "ETC")}
             option={group.currency}
             onChange={(value) => onChange({ ...group, currency: value })}
           />

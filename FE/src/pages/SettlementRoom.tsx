@@ -32,9 +32,9 @@ import type {
   RoomMemberResponse,
   RoomSummaryResponse,
 } from "../types/roomType";
-import Button from "../components/Button";
 import ConfirmModal from "../components/ConfirmModal";
-import ExpenseForm from "../components/ExpenseForm";
+import ExpenseAddSheet from "../components/ExpenseAddSheet";
+import { PAGE_FONT_FAMILY } from "../constants/avatar";
 import ExpenseDetail from "./ExpenseDetail";
 import SettlementRoomSetting from "./SettlementRoomSetting";
 import SettlementSummary from "./SettlementSummary";
@@ -98,7 +98,11 @@ export default function SettlementRoom() {
   }, [slug, navigate]);
 
   if (!room || !slug || !memberAccess) {
-    return <div className="explain-text">불러오는 중...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-soft">
+        불러오는 중...
+      </div>
+    );
   }
 
   /**
@@ -410,18 +414,19 @@ function SettlementRoomContent({
   };
 
   /**
-   * 그룹 삭제
-   * @param groupIndex 그룹 인덱스
+   * 지출 추가 시트 열기 (결제자가 비어 있으면 본인을 기본 결제자로 선택)
    */
-  const handleGroupRemove = (groupIndex: number) => {
-    setGroups((prev) => prev.filter((_, i) => i !== groupIndex));
-  };
-
-  /**
-   * 그룹 추가
-   */
-  const handleAddGroup = () => {
-    setGroups((prev) => [...prev, createEmptyExpenseGroup(formMembers)]);
+  const handleOpenAddExpense = () => {
+    if (formInit) {
+      setGroups((prev) =>
+        prev.map((group, i) =>
+          i === 0 && group.payer === null
+            ? { ...group, payer: formInit.currentMemberId }
+            : group,
+        ),
+      );
+    }
+    setIsAddExpenseOpen(true);
   };
 
   /**
@@ -436,6 +441,7 @@ function SettlementRoomContent({
     (group) =>
       group.payer !== null &&
       group.paidAt.length > 0 &&
+      (!group.isOverseas || /^[A-Z]{3}$/.test(group.currency)) &&
       group.bankName.length > 0 &&
       group.accountNumber.trim().length > 0 &&
       group.items.every(
@@ -654,6 +660,26 @@ function SettlementRoomContent({
 
     try {
       await updateRemittanceStatus(slug, settlementId, isDone);
+
+      // 완료 체크 시에만 받음/보냄 안내 (체크 해제 시에는 표시하지 않음)
+      if (isDone) {
+        const received = mySettlement?.receiveList.find(
+          (item) => item.settlementId === settlementId,
+        );
+        const sent = mySettlement?.sendList.find(
+          (item) => item.settlementId === settlementId,
+        );
+
+        if (received) {
+          toast.success(
+            `${received.senderName}님에게 ${received.amount.toLocaleString("ko-KR")}원을 받았어요`,
+          );
+        } else if (sent) {
+          toast.success(
+            `${sent.receiverName}님에게 ${sent.amount.toLocaleString("ko-KR")}원을 보냈어요`,
+          );
+        }
+      }
     } catch (error) {
       applyDone(!isDone);
       toast.error(
@@ -666,29 +692,200 @@ function SettlementRoomContent({
     }
   };
 
+  const hasExpenses = (expenseSummary?.expenses.length ?? 0) > 0;
+  const canSettle = hasExpenses && !isSettling && !!expenseSummary;
+
   return (
-    <div className="flex flex-col flex-1 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <div className="text-xl font-bold">결제내역 입력</div>
-          <div className="explain-text">{room.title}</div>
+    <div
+      className={`min-h-screen bg-paper text-ink break-keep ${PAGE_FONT_FAMILY}`}
+    >
+      <div className="mx-auto max-w-[520px] px-5 pb-[140px]">
+        {/* 헤더 */}
+        <header className="flex h-16 items-center justify-between">
+          <div className="flex items-center gap-2 text-base font-extrabold tracking-[-0.04em]">
+            <span className="h-2 w-2 rotate-45 rounded-[2px] bg-brand" />
+            splitlink
+          </div>
+          <button
+            type="button"
+            aria-label="설정"
+            className="-mr-2 flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl text-ink active:bg-[#eae9e4]"
+            onClick={() => {
+              if (!formInit) {
+                toast.error(
+                  "멤버 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요",
+                );
+                return;
+              }
+              setIsSettingOpen(true);
+            }}
+          >
+            <img src={settingsIcon} alt="" className="h-[21px] w-[21px]" />
+          </button>
+        </header>
+
+        <div className="pt-3 pb-[22px]">
+          <div className="mb-1.5 text-[13px] font-bold text-brand">
+            결제내역
+          </div>
+          <h1 className="text-[length:clamp(26px,7vw,34px)] leading-[1.2] font-extrabold tracking-[-0.045em]">
+            {room.title}
+          </h1>
         </div>
-        <button
-          type="button"
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-white cursor-pointer"
-          aria-label="설정"
-          onClick={() => {
-            if (!formInit) {
-              toast.error(
-                "멤버 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요",
-              );
-              return;
-            }
-            setIsSettingOpen(true);
-          }}
-        >
-          <img src={settingsIcon} alt="" className="w-4 h-4" />
-        </button>
+
+        {/* 요약 카드 */}
+        <div className="mb-7 rounded-[20px] bg-ink p-[22px] text-white">
+          <div className="flex items-baseline justify-between gap-3 text-[13px] text-white/60">
+            <div>총 지출</div>
+            <div>
+              <b className="text-white">{expenseSummary?.currentMemberName}</b>{" "}
+              기준
+            </div>
+          </div>
+          <div className="mt-1.5 mb-[18px] text-[length:clamp(28px,8vw,36px)] font-extrabold tracking-[-0.04em] whitespace-nowrap tabular-nums">
+            {totalAmount.toLocaleString("ko-KR")}원
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-[14px] bg-white/10 p-3.5">
+              <div className="mb-1 text-xs text-white/60">받을 금액</div>
+              <div
+                className={`text-lg font-extrabold whitespace-nowrap tabular-nums ${
+                  myReceiveAmount > 0 ? "text-[#8fd9b0]" : "text-white/45"
+                }`}
+              >
+                {myReceiveAmount.toLocaleString("ko-KR")}원
+              </div>
+            </div>
+            <div className="rounded-[14px] bg-white/10 p-3.5">
+              <div className="mb-1 text-xs text-white/60">보낼 금액</div>
+              <div
+                className={`text-lg font-extrabold whitespace-nowrap tabular-nums ${
+                  mySendAmount > 0 ? "text-[#f2a99b]" : "text-white/45"
+                }`}
+              >
+                {mySendAmount.toLocaleString("ko-KR")}원
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 결제내역 목록 */}
+        {!hasExpenses ? (
+          <div className="rounded-[20px] border-[1.5px] border-dashed border-[#d3d1cb] px-5 py-12 text-center">
+            <div className="mb-1.5 text-base font-extrabold">
+              아직 지출이 없어요
+            </div>
+            <div className="mb-5 text-sm text-ink-soft">
+              첫 결제부터 기록해보세요.
+            </div>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={handleOpenAddExpense}
+                className="cursor-pointer rounded-xl bg-ink px-[22px] py-[13px] text-sm font-extrabold text-white active:scale-[0.96]"
+              >
+                + 지출 추가
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="mx-1 mb-2.5 flex items-baseline justify-between">
+              <div className="text-[15px] font-extrabold">결제 내역</div>
+              <div className="text-[13px] text-ink-soft">
+                {expenseSummary?.expenses.length}건
+              </div>
+            </div>
+            <div className="mb-8 rounded-[20px] bg-white px-[18px] py-1">
+              {expenseSummary?.expenses.map((expense) => (
+                <button
+                  key={expense.expenseId}
+                  type="button"
+                  className="flex w-full animate-sl-up cursor-pointer items-center gap-3 border-b border-line py-[15px] text-left last:border-b-0 active:opacity-60"
+                  onClick={() => handleExpenseClick(expense.expenseId)}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-extrabold text-brand-dark">
+                    {expense.payerName.slice(0, 1)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-bold">
+                      {expense.title}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-ink-soft">
+                      {expense.payerName} 결제 · 참여{" "}
+                      {expense.targetMemberCount}명
+                    </div>
+                  </div>
+                  <div className="text-[15px] font-extrabold whitespace-nowrap tabular-nums">
+                    {expense.amount.toLocaleString("ko-KR")}원
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {isLocked && (
+          <p className="text-[13px] leading-[1.6] text-ink-soft">
+            정산이 시작되어 결제내역을 추가할 수 없어요.
+          </p>
+        )}
+      </div>
+
+      {!isLocked && isAddExpenseOpen && groups[0] && (
+        <ExpenseAddSheet
+          group={groups[0]}
+          members={formMembers}
+          isValid={isValid && !!formInit}
+          isSubmitting={isSubmiting}
+          onChange={(next) => handleGroupChange(0, next)}
+          onSubmit={handleSubmit}
+          onClose={() => setIsAddExpenseOpen(false)}
+        />
+      )}
+
+      {/* 하단 고정 버튼 */}
+      <div className="fixed right-0 bottom-0 left-0 z-20 bg-gradient-to-t from-paper from-70% to-paper/0 px-5 pt-5 pb-[calc(16px+env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-[480px] gap-2">
+          {!isLocked && (
+            <button
+              type="button"
+              aria-label="지출 추가"
+              onClick={handleOpenAddExpense}
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[14px] border-[1.5px] border-line bg-white px-5 text-[15px] font-extrabold active:scale-[0.96]"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              지출
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={!canSettle}
+            onClick={handleOpenSummary}
+            className={`flex flex-1 items-center justify-center rounded-[14px] p-[18px] text-base font-extrabold text-white transition-[background-color,transform] duration-200 active:scale-[0.98] ${
+              canSettle
+                ? "cursor-pointer bg-ink"
+                : "cursor-not-allowed bg-[#c9c7c1]"
+            }`}
+          >
+            {isSettling
+              ? "계산 중..."
+              : isLocked
+                ? "정산 내역 보기"
+                : "정산 계산하기"}
+          </button>
+        </div>
       </div>
 
       {isSettingOpen && (
@@ -699,6 +896,7 @@ function SettlementRoomContent({
           pin={pin}
           baseCurrency={baseCurrency}
           isLocked={isLocked}
+          expenseCount={expenseSummary?.expenses.length ?? 0}
           onClose={() => setIsSettingOpen(false)}
           onSaved={async (updated, newPin, savedMembers) => {
             const isRefreshed = await onSettingSaved(
@@ -738,8 +936,8 @@ function SettlementRoomContent({
 
       {isSettleConfirmOpen && (
         <ConfirmModal
-          title="정산 계산"
-          message="정산을 계산하면 이후에는 결제내역을 추가·수정·삭제할 수 없어요. 계속할까요?"
+          title="정산을 계산할까요?"
+          message="계산하면 결제내역을 추가·수정·삭제할 수 없어요."
           confirmText="계산하기"
           onConfirm={runSettlement}
           onCancel={() => setIsSettleConfirmOpen(false)}
@@ -748,6 +946,10 @@ function SettlementRoomContent({
 
       {isSummaryOpen && mySettlement && (
         <SettlementSummary
+          roomTitle={room.title}
+          memberCount={formMembers.length}
+          totalAmount={totalAmount}
+          myName={expenseSummary?.currentMemberName ?? ""}
           sendList={mySettlement.sendList}
           receiveList={mySettlement.receiveList}
           pendingSettlementIds={pendingSettlementIds}
@@ -756,151 +958,6 @@ function SettlementRoomContent({
           onToggleDone={handleToggleSettlementDone}
         />
       )}
-
-      <div className="flex items-center justify-between rounded-[10px] bg-white p-4">
-        <div className="flex flex-col space-y-1">
-          <div className="text-[10pt] text-[#281c18]">총 지출</div>
-          <div className="text-xl font-bold">
-            {totalAmount.toLocaleString()}원
-          </div>
-        </div>
-        <div className="flex items-start space-x-6">
-          <div className="flex flex-col space-y-1 items-end">
-            <div className="text-[10pt] text-[#281c18]">내가 보낼 금액</div>
-            <div className="text-xl font-bold text-[#e85a48]">
-              {mySendAmount.toLocaleString()}원
-            </div>
-          </div>
-          <div className="flex flex-col space-y-1 items-end">
-            <div className="text-[10pt] text-[#281c18]">내가 받을 금액</div>
-            <div className="text-xl font-bold text-[#2f9e6e]">
-              {myReceiveAmount.toLocaleString()}원
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {expenseSummary && expenseSummary.expenses.length > 0 && (
-        <div className="flex flex-col space-y-3">
-          <span className="font-bold">결제내역</span>
-          <div className="flex flex-col space-y-3">
-            {expenseSummary.expenses.map((expense) => (
-              <button
-                key={expense.expenseId}
-                type="button"
-                className="flex w-full items-center justify-between rounded-[10px] bg-white p-4 text-left cursor-pointer"
-                onClick={() => handleExpenseClick(expense.expenseId)}
-              >
-                <div className="flex flex-col space-y-1">
-                  <div className="font-bold">{expense.title}</div>
-                  <div className="text-[10pt] text-[#281c18]">
-                    결제자: {expense.payerName} · 참여{" "}
-                    {expense.targetMemberCount}명
-                  </div>
-                </div>
-                <div className="font-bold">
-                  {expense.amount.toLocaleString()}원
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isLocked ? (
-        <div className="explain-text">
-          정산이 시작되어 결제내역을 추가할 수 없어요.
-        </div>
-      ) : (
-        <div className="flex flex-col space-y-4 rounded-[10px] bg-white p-4">
-          <button
-            type="button"
-            className="flex items-center justify-between cursor-pointer"
-            aria-expanded={isAddExpenseOpen}
-            onClick={() => setIsAddExpenseOpen((prev) => !prev)}
-          >
-            <span className="font-bold">지출 추가</span>
-            <svg
-              className={`w-4 h-4 text-[#281c18] transition-transform ${
-                isAddExpenseOpen ? "rotate-180" : ""
-              }`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          {isAddExpenseOpen && (
-            <>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="text-[10pt] text-[#281c18] cursor-pointer"
-                  onClick={handleReset}
-                >
-                  초기화
-                </button>
-              </div>
-
-              <div className="flex flex-col space-y-4">
-                {groups.map((group, groupIndex) => (
-                  <ExpenseForm
-                    key={group.id}
-                    index={groupIndex + 1}
-                    group={group}
-                    members={formMembers}
-                    onChange={(next) => handleGroupChange(groupIndex, next)}
-                    onRemove={
-                      groups.length > 1
-                        ? () => handleGroupRemove(groupIndex)
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-
-              <button
-                type="button"
-                className="w-full rounded-[10px] border border-dashed border-[#e6dfd9] py-2.5 text-[10pt] font-semibold text-[#281c18] cursor-pointer"
-                onClick={handleAddGroup}
-              >
-                + 새 결제자 · 날짜로 그룹 추가
-              </button>
-
-              <Button
-                title={isSubmiting ? "추가 중..." : "추가하기"}
-                bgColor="#000"
-                textColor="#fff"
-                className="w-full rounded-[10px]"
-                disabled={!isValid || isSubmiting || !formInit}
-                onClick={handleSubmit}
-              />
-            </>
-          )}
-        </div>
-      )}
-
-      <Button
-        title={
-          isSettling
-            ? "계산 중..."
-            : isLocked
-              ? "정산 내역 보기"
-              : "정산 계산하기"
-        }
-        bgColor="#e85a48"
-        textColor="#fff"
-        className="w-full rounded-2xl h-12.5"
-        disabled={
-          !expenseSummary || expenseSummary.expenses.length === 0 || isSettling
-        }
-        onClick={handleOpenSummary}
-      />
     </div>
   );
 }
