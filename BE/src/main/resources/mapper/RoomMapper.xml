@@ -137,6 +137,7 @@
     <select id="findRoomBySlugAndMemberId" resultType="com.splitlink.entity.Room">
         SELECT
             r.room_id AS roomId,
+            r.base_currency AS baseCurrency,
             r.is_locked AS isLocked,
             r.is_closed AS isClosed
         FROM rooms r

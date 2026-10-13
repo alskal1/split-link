@@ -4,11 +4,9 @@ import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
-import com.splitlink.dto.response.ExpenseDetailResponse;
-import com.splitlink.dto.response.ExpenseFormInitResponse;
-import com.splitlink.dto.response.ExpenseListResponse;
-import com.splitlink.dto.response.ExpenseUpdateFormResponse;
+import com.splitlink.dto.response.*;
 import com.splitlink.entity.Expense;
+import com.splitlink.entity.Room;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
@@ -39,6 +37,7 @@ public class ExpenseService {
     private final SettlementMapper settlementMapper;
     private final RoomAccessValidator roomAccessValidator;
     private final EncryptionUtil encryptionUtil;
+    private final ExchangeRateService exchangeRateService;
 
     /**
      * 지출 입력 폼 초기화에 필요한 데이터 조회 (계좌 정보 + 방 멤버 목록)
@@ -91,22 +90,24 @@ public class ExpenseService {
     @Transactional
     public void createExpenses(String slug, Long memberId, ExpenseBatchCreateRequest request) {
 
-        // 요청자 본인의 방 접근 권한 및 roomId 조회
-        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+        // 방 접근 권한 검증 및 Room 엔티티 조회
+        Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
+        Long roomId = room.getRoomId();
 
-        // 방 마감 및 잠금 상태 검증 추가
-        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
-        if (status == null) {
-            throw new IllegalArgumentException("존재하지 않는 방입니다.");
-        }
-        if (status.isClosed()) {
+        // 방 마감/잠금 상태 검증
+        if (room.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 완료된 방에는 지출을 추가할 수 없습니다.");
         }
-        if (status.isLocked()) {
+        if (room.isLocked()) {
             throw new IllegalArgumentException("이미 지출 입력이 잠긴 방에는 지출을 추가할 수 없습니다.");
         }
 
-        // 요청 데이터 내의 모든 payerId와 targetMemberIds 수집
+        // 방 기준 정산 통화 세팅
+        String roomBaseCurrency = (room.getBaseCurrency() == null || room.getBaseCurrency().isBlank())
+                ? "KRW"
+                : room.getBaseCurrency();
+
+        // 요청 데이터 내의 모든 payerId와 targetMemberIds 수집 및 방 소속 검증
         Set<Long> allRequestMemberIds = new HashSet<>();
         for (ExpenseBatchCreateRequest.ExpenseGroupRequest group : request.getExpenseGroups()) {
             allRequestMemberIds.add(group.getPayerId());
@@ -127,33 +128,43 @@ public class ExpenseService {
             // 결제자 최신 계좌번호 업데이트
             memberMapper.updateAccountInfo(group.getPayerId(), group.getBankName(), encryptedAccount);
 
-            // TODO: [환율] 추후 다국어/외화 결제 지원 시 고도화 예정 (현재 원화 KRW 1.0 고정)
-            // 통화 및 환율 세팅 (원화 전용)
-            String currency = (group.getCurrency() == null) ? "KRW" : group.getCurrency().trim().toUpperCase();
-            BigDecimal fxRate = BigDecimal.ONE; // 원화니까 환율은 1.0 고정
+            // 결제 통화 지정 (전달받은 통화가 없으면 방 기준 통화 사용)
+            String paymentCurrency = (group.getCurrency() == null || group.getCurrency().isBlank())
+                    ? roomBaseCurrency
+                    : group.getCurrency().trim().toUpperCase();
+
+            // 결제 일자(spentAt) 기준 [결제 통화 -> 방 기준 통화] fx_rate 조회
+            BigDecimal fxRate = exchangeRateService.getHistoricalExchangeRate(
+                    paymentCurrency,
+                    roomBaseCurrency,
+                    group.getSpentAt().toLocalDate()
+            );
 
             // 결제자 그룹 내 세부 지출 항목 등록
             for (ExpenseBatchCreateRequest.ExpenseItemRequest item : group.getItems()) {
+
+                // 외화 금액 * 환율 = 방 기준 통화 금액 (외화 금액 * fx_rate)
+                BigDecimal convertedTotalAmount = item.getAmount().multiply(fxRate);
 
                 Expense expense = Expense.builder()
                         .roomId(roomId)
                         .payerId(group.getPayerId())
                         .title(item.getTitle())
-                        .amount(item.getAmount())
+                        .amount(item.getAmount())        // 외화 원금
                         .bankName(group.getBankName())
                         .accountNumber(encryptedAccount)
-                        .currency(currency)
-                        .fxRate(fxRate)
+                        .currency(paymentCurrency)       // 결제 통화
+                        .fxRate(fxRate)                  // 적용 환율
                         .spentAt(group.getSpentAt())
                         .build();
 
-                // 메인 지출 데이터 저장 (MyBatis useGeneratedKeys를 통해 expenseId PK 주입됨)
+                // 메인 지출 데이터 저장
                 expenseMapper.insertExpense(expense);
 
-                // 오차 보정된 멤버별 부담금 리스트 계산 (별도 메서드 호출)
+                // 1/N 부담금 계산 시 '방 기준 통화 환산액(convertedTotalAmount)' 전달
                 List<ExpenseMapper.ExpenseShareParam> shares = calculateShares(
                         expense.getExpenseId(),
-                        item.getAmount(),
+                        convertedTotalAmount,
                         item.getTargetMemberIds()
                 );
 
