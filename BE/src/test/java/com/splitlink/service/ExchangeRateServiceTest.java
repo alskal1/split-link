@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,11 +59,11 @@ class ExchangeRateServiceTest {
 
             // then
             assertThat(rate).isEqualByComparingTo(BigDecimal.ONE);
-            verifyNoInteractions(restClient); // RestClient 호출이 전혀 없어야 함
+            verifyNoInteractions(restClient);
         }
 
         @Test
-        @DisplayName("성공: 외화(USD -> KRW) 조회 시 Frankfurter API를 호출하여 환율을 정상 반환한다.")
+        @DisplayName("성공: 과거 외화(USD -> KRW) 조회 시 Frankfurter API를 호출하여 환율을 정상 반환한다.")
         void getHistoricalExchangeRate_ForeignCurrency_Success() {
             // given
             String fromCurrency = "USD";
@@ -76,7 +77,6 @@ class ExchangeRateServiceTest {
                     .rates(Map.of("KRW", new BigDecimal("1350.25")))
                     .build();
 
-            // RestClient Chaining Mocking
             given(restClient.get()).willReturn(requestHeadersUriSpec);
             given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
             given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
@@ -91,18 +91,46 @@ class ExchangeRateServiceTest {
         }
 
         @Test
-        @DisplayName("예외: Frankfurter API 응답에 해당 통화 환율 정보가 없는 경우 IllegalArgumentException이 발생한다.")
-        void getHistoricalExchangeRate_RateNotFound_ThrowsException() {
+        @DisplayName("성공: 주말/공휴일 등으로 1차 날짜 조회가 실패할 경우 /latest 로 2차 우회(Fallback)하여 환율을 반환한다.")
+        void getHistoricalExchangeRate_FallbackToLatest_Success() {
             // given
             String fromCurrency = "USD";
-            String toCurrency = "ABC"; // 존재하지 않는 통화
-            LocalDate date = LocalDate.of(2026, 9, 17);
+            String toCurrency = "KRW";
+            LocalDate weekendDate = LocalDate.of(2026, 10, 10); // 주말 토요일
+
+            FrankfurterApiResponse emptyResponse = FrankfurterApiResponse.builder()
+                    .rates(Map.of()) // 1차 실패 (공시 데이터 없음)
+                    .build();
+
+            FrankfurterApiResponse fallbackResponse = FrankfurterApiResponse.builder()
+                    .rates(Map.of("KRW", new BigDecimal("1340.00"))) // 2차 성공
+                    .build();
+
+            given(restClient.get()).willReturn(requestHeadersUriSpec);
+            given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
+            given(responseSpec.body(FrankfurterApiResponse.class))
+                    .willReturn(emptyResponse)
+                    .willReturn(fallbackResponse);
+
+            // when
+            BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, weekendDate);
+
+            // then
+            assertThat(rate).isEqualByComparingTo("1340.00");
+            verify(restClient, times(2)).get(); // 1차 시도 + 2차 fallback 총 2회 호출 검증
+        }
+
+        @Test
+        @DisplayName("성공: 유럽 현지 기준 오늘 날짜 요청 시 /latest Endpoint로 바로 우회하여 환율을 조회한다.")
+        void getHistoricalExchangeRate_EuropeToday_UsesLatestEndpoint() {
+            // given
+            String fromCurrency = "USD";
+            String toCurrency = "KRW";
+            LocalDate europeToday = LocalDate.now(ZoneId.of("Europe/Berlin"));
 
             FrankfurterApiResponse mockResponse = FrankfurterApiResponse.builder()
-                    .amount(BigDecimal.ONE)
-                    .base("USD")
-                    .date("2026-09-17")
-                    .rates(Map.of("EUR", new BigDecimal("0.92")))
+                    .rates(Map.of("KRW", new BigDecimal("1355.00")))
                     .build();
 
             given(restClient.get()).willReturn(requestHeadersUriSpec);
@@ -110,15 +138,17 @@ class ExchangeRateServiceTest {
             given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
             given(responseSpec.body(FrankfurterApiResponse.class)).willReturn(mockResponse);
 
-            // when & then
-            assertThatThrownBy(() -> exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("환율(fx_rate) 정보를 가져올 수 없습니다.");
+            // when
+            BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, europeToday);
+
+            // then
+            assertThat(rate).isEqualByComparingTo("1355.00");
+            verify(requestHeadersUriSpec).uri(contains("latest"), any(Object[].class));
         }
 
         @Test
-        @DisplayName("예외: 외부 API 호출 실패로 body가 null인 경우 IllegalArgumentException이 발생한다.")
-        void getHistoricalExchangeRate_ResponseBodyNull_ThrowsException() {
+        @DisplayName("예외: 1차/2차 시도 모두 실패 시 IllegalArgumentException 예외가 발생한다.")
+        void getHistoricalExchangeRate_AllAttemptsFail_ThrowsException() {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
@@ -132,7 +162,7 @@ class ExchangeRateServiceTest {
             // when & then
             assertThatThrownBy(() -> exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("환율(fx_rate) 정보를 가져올 수 없습니다.");
+                    .hasMessageContaining("환율 정보를 가져올 수 없습니다.");
         }
     }
 }
