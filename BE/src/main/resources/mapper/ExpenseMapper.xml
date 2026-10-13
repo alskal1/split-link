@@ -51,7 +51,7 @@
 
     <!-- 방 전체 총 지출 합계 -->
     <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
-        SELECT IFNULL(SUM(amount), 0)
+        SELECT IFNULL(SUM(amount * IFNULL(fx_rate, 1.0)), 0)
         FROM expenses
         WHERE room_id = #{roomId}
     </select>
@@ -178,6 +178,8 @@
             amount = #{amount},
             bank_name = #{bankName},
             account_number = #{accountNumber},
+            currency = #{currency},
+            fx_rate = #{fxRate},
             spent_at = #{spentAt}
         WHERE expense_id = #{expenseId}
           AND room_id = #{roomId}

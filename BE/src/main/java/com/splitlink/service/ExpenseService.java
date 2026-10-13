@@ -288,6 +288,7 @@ public class ExpenseService {
                 .build();
     }
 
+    // TODO: 주석 추가
     @Transactional(readOnly = true)
     public ExpenseUpdateFormResponse getExpenseUpdateForm(String slug, Long expenseId, Long memberId) {
 
@@ -354,31 +355,43 @@ public class ExpenseService {
     @Transactional
     public void updateExpense(String slug, Long expenseId, Long memberId, ExpenseUpdateRequest request) {
 
-        // 방 접근 권한 및 방 존재 검증 후 roomId 반환
-        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+        // 방 접근 권한 및 방 존재 검증 후 Room 엔티티(roomId, baseCurrency, isClosed, isLocked) 단 1번의 쿼리로 조회
+        Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
+        Long roomId = room.getRoomId();
 
         // 방 마감 상태(isLocked, isClosed) 검증
-        RoomMapper.RoomStatus status = roomMapper.findRoomStatusBySlug(slug);
-        if (status == null) {
-            throw new IllegalArgumentException("존재하지 않는 방입니다.");
-        }
-        if (status.isClosed()) {
+        if (room.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 완료된 방의 지출은 수정할 수 없습니다.");
         }
-        if (status.isLocked()){
+        if (room.isLocked()){
             throw new IllegalArgumentException("이미 지출 입력이 완료된 방의 지출은 수정할 수 없습니다.");
         }
+
+        // 방 기준 정산 통화 세팅
+        String roomBaseCurrency = (room.getBaseCurrency() == null || room.getBaseCurrency().isBlank())
+                ? "KRW"
+                : room.getBaseCurrency();
 
         // 요청 바디의 payerId 및 targetMemberIds가 해당 방 소속 멤버인지 일괄 검증 (IDOR 방지)
         Set<Long> requestMemberIds = new HashSet<>(request.getTargetMemberIds());
         requestMemberIds.add(request.getPayerId());
         roomAccessValidator.validateMembersInRoom(roomId, new ArrayList<>(requestMemberIds));
 
-        // 계좌번호 암호화
+        // 계좌번호 암호화 및 결제자 최신 계좌정보 업데이트
         String encryptedAccount = encryptionUtil.encrypt(request.getAccountNumber());
-
-        // members 테이블 결제자 최신 계좌정보 업데이트
         memberMapper.updateAccountInfo(request.getPayerId(), request.getBankName(), encryptedAccount);
+
+        // 결제 통화 지정 (전달받은 통화가 없으면 방 기준 통화 사용)
+        String paymentCurrency = (request.getCurrency() == null || request.getCurrency().isBlank())
+                ? roomBaseCurrency
+                : request.getCurrency().trim().toUpperCase();
+
+        // 결제 일자 기준 [결제 통화 -> 방 기준 통화] fx_rate 조회
+        BigDecimal fxRate = exchangeRateService.getHistoricalExchangeRate(
+                paymentCurrency,
+                roomBaseCurrency,
+                request.getSpentAt().toLocalDate()
+        );
 
         // 메인 지출 데이터 수정
         int updatedRows = expenseMapper.updateExpense(
@@ -389,20 +402,27 @@ public class ExpenseService {
                 request.getAmount(),
                 request.getBankName(),
                 encryptedAccount,
+                paymentCurrency,
+                fxRate,
                 request.getSpentAt()
         );
+
         if (updatedRows == 0) {
             throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
 
-        // 기존 부담금(expense_shares) 삭제 후 1/N 오차 보정하여 새 부담금 재등록
+        // 기존 부담금(expense_shares) 삭제
         expenseMapper.deleteExpenseSharesByExpenseId(expenseId);
+
+        // 방 기준 통화 환산 금액(외화 금액 * fxRate)으로 1/N 부담금 재계산 및 Bulk Insert
+        BigDecimal convertedTotalAmount = request.getAmount().multiply(fxRate);
 
         List<ExpenseMapper.ExpenseShareParam> newShares = calculateShares(
                 expenseId,
-                request.getAmount(),
+                convertedTotalAmount,
                 request.getTargetMemberIds()
         );
+
         expenseMapper.insertExpenseShares(newShares);
     }
 
