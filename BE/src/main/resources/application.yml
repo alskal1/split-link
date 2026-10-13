@@ -23,3 +23,7 @@ jwt:
 encryption:
   # 환경변수 ENCRYPTION_SECRET_KEY가 있으면 쓰고, 없으면 뒤의 32바이트 기본값 사용
   secret-key: ${ENCRYPTION_SECRET_KEY:splitlink-encryption-secret-key32}
+
+app:
+  exchange-rate:
+    api-key: ${app.exchange-rate.api-key:dev-key}
