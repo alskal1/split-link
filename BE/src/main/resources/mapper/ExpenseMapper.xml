@@ -62,6 +62,9 @@
             e.expense_id AS expenseId,
             e.title AS title,
             e.amount AS amount,
+            e.currency AS currency,
+            e.fx_rate AS fxRate,
+            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
             m.name as payerName,
             CASE
                 WHEN e.payer_id = #{memberId}
@@ -86,6 +89,8 @@
             e.amount,
             e.currency,
             e.fx_rate AS fxRate,
+            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
+            r.base_currency AS roomBaseCurrency,
             e.spent_at AS spentAt,
             e.payer_id AS payerId,
             m.name AS payerName,
@@ -94,6 +99,7 @@
             CASE WHEN e.payer_id = #{memberId} THEN TRUE ELSE FALSE END AS isMyPayment
         FROM expenses e
         JOIN members m ON e.payer_id = m.member_id
+        JOIN rooms r on e.room_id = r.room_id
         WHERE e.expense_id = #{expenseId}
             AND e.room_id = #{roomId}
     </select>
@@ -103,10 +109,11 @@
         SELECT
             es.member_id AS memberId,
             m.name,
-            es.amount AS shareAmount,
+            ROUND(es.amount * IFNULL(e.fx_rate, 1.0), 0) AS shareAmount,
             CASE WHEN es.member_id = #{memberId} THEN TRUE ELSE FALSE END AS isSelf
         FROM expense_shares es
         JOIN members m ON es.member_id = m.member_id
+        JOIN expenses e ON es.expense_id = e.expense_id
         WHERE es.expense_id = #{expenseId}
           AND m.room_id = #{roomId}
         ORDER BY es.member_id ASC
@@ -145,14 +152,14 @@
         FROM members m
         -- [A] 멤버별 대신 내준 금액 (Paid)
         LEFT JOIN (
-            SELECT payer_id, SUM(amount * fx_rate) AS total_paid
+            SELECT payer_id, SUM(amount * IFNULL(fx_rate, 1.0)) AS total_paid
             FROM expenses
             WHERE room_id = #{roomId}
             GROUP BY payer_id
         ) p ON m.member_id = p.payer_id
         -- [B] 멤버별 부담해야 할 금액 (Shared)
         LEFT JOIN (
-            SELECT es.member_id, SUM(es.amount * IFNULL(e.fx_rate, 1)) AS total_shared
+            SELECT es.member_id, SUM(es.amount * IFNULL(e.fx_rate, 1.0)) AS total_shared
             FROM expense_shares es
             INNER JOIN expenses e ON es.expense_id = e.expense_id
             WHERE e.room_id = #{roomId}
