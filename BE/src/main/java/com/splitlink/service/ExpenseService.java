@@ -56,7 +56,6 @@ public class ExpenseService {
         ExpenseFormInitResponse.AccountInfo defaultAccount = memberMapper.findAccountInfoByMemberId(memberId)
                 .orElse(null);
 
-        // TODO: [보안] 향후 계좌번호 AES-256 암복호화 유틸리티 적용 예정
         // 회원은 존재하나 계좌 등록을 안한 경우 (bank_name이 null) DTO를 null로 치환하여 전달
         if (defaultAccount != null && defaultAccount.getBankName() == null) {
             defaultAccount = null;
