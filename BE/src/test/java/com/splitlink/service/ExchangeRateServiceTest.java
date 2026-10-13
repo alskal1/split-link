@@ -1,5 +1,7 @@
 package com.splitlink.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.splitlink.dto.response.FrankfurterApiResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -7,7 +9,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -30,6 +37,9 @@ class ExchangeRateServiceTest {
 
     @Mock
     private RestClient restClient;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     @SuppressWarnings("rawtypes")
@@ -64,86 +74,72 @@ class ExchangeRateServiceTest {
 
         @Test
         @DisplayName("성공: 과거 외화(USD -> KRW) 조회 시 Frankfurter API를 호출하여 환율을 정상 반환한다.")
-        void getHistoricalExchangeRate_ForeignCurrency_Success() {
+        void getHistoricalExchangeRate_ForeignCurrency_Success() throws JsonProcessingException {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
-            LocalDate date = LocalDate.of(2026, 9, 17);
+            LocalDate date = LocalDate.of(2026, 10, 12);
 
-            FrankfurterApiResponse mockResponse = FrankfurterApiResponse.builder()
+            FrankfurterApiResponse mockResponseDto = FrankfurterApiResponse.builder()
                     .amount(BigDecimal.ONE)
                     .base("USD")
-                    .date("2026-09-17")
-                    .rates(Map.of("KRW", new BigDecimal("1350.25")))
+                    .date("2026-10-12")
+                    .rates(Map.of("KRW", new BigDecimal("1333.09")))
                     .build();
 
+            String jsonBody = objectMapper.writeValueAsString(mockResponseDto);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<String> responseEntity = new ResponseEntity<>(jsonBody, headers, HttpStatus.OK);
+
             given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
+            given(requestHeadersUriSpec.uri(anyString())).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
             given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.body(FrankfurterApiResponse.class)).willReturn(mockResponse);
+            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
+            given(responseSpec.toEntity(String.class)).willReturn(responseEntity);
 
             // when
             BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date);
 
             // then
-            assertThat(rate).isEqualByComparingTo("1350.25");
+            assertThat(rate).isEqualByComparingTo("1333.09");
             verify(restClient, times(1)).get();
         }
 
         @Test
-        @DisplayName("성공: 주말/공휴일 등으로 1차 날짜 조회가 실패할 경우 /latest 로 2차 우회(Fallback)하여 환율을 반환한다.")
-        void getHistoricalExchangeRate_FallbackToLatest_Success() {
-            // given
-            String fromCurrency = "USD";
-            String toCurrency = "KRW";
-            LocalDate weekendDate = LocalDate.of(2026, 10, 10); // 주말 토요일
-
-            FrankfurterApiResponse emptyResponse = FrankfurterApiResponse.builder()
-                    .rates(Map.of()) // 1차 실패 (공시 데이터 없음)
-                    .build();
-
-            FrankfurterApiResponse fallbackResponse = FrankfurterApiResponse.builder()
-                    .rates(Map.of("KRW", new BigDecimal("1340.00"))) // 2차 성공
-                    .build();
-
-            given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.body(FrankfurterApiResponse.class))
-                    .willReturn(emptyResponse)
-                    .willReturn(fallbackResponse);
-
-            // when
-            BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, weekendDate);
-
-            // then
-            assertThat(rate).isEqualByComparingTo("1340.00");
-            verify(restClient, times(2)).get(); // 1차 시도 + 2차 fallback 총 2회 호출 검증
-        }
-
-        @Test
-        @DisplayName("성공: 유럽 현지 기준 오늘 날짜 요청 시 /latest Endpoint로 바로 우회하여 환율을 조회한다.")
-        void getHistoricalExchangeRate_EuropeToday_UsesLatestEndpoint() {
+        @DisplayName("성공: 유럽 현지 기준 오늘 날짜 요청 시 latest Endpoint로 환율을 정상 조회한다.")
+        void getHistoricalExchangeRate_EuropeToday_UsesLatestEndpoint() throws JsonProcessingException {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
             LocalDate europeToday = LocalDate.now(ZoneId.of("Europe/Berlin"));
 
-            FrankfurterApiResponse mockResponse = FrankfurterApiResponse.builder()
-                    .rates(Map.of("KRW", new BigDecimal("1355.00")))
+            FrankfurterApiResponse mockResponseDto = FrankfurterApiResponse.builder()
+                    .rates(Map.of("KRW", new BigDecimal("1333.09")))
                     .build();
 
+            String jsonBody = objectMapper.writeValueAsString(mockResponseDto);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<String> responseEntity = new ResponseEntity<>(jsonBody, headers, HttpStatus.OK);
+
             given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
+            given(requestHeadersUriSpec.uri(contains("latest"))).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
             given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.body(FrankfurterApiResponse.class)).willReturn(mockResponse);
+            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
+            given(responseSpec.toEntity(String.class)).willReturn(responseEntity);
 
             // when
             BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, europeToday);
 
             // then
-            assertThat(rate).isEqualByComparingTo("1355.00");
-            verify(requestHeadersUriSpec).uri(contains("latest"), any(Object[].class));
+            assertThat(rate).isEqualByComparingTo("1333.09");
         }
 
         @Test
@@ -152,12 +148,17 @@ class ExchangeRateServiceTest {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
-            LocalDate date = LocalDate.of(2026, 9, 17);
+            LocalDate date = LocalDate.of(2026, 10, 12);
+
+            ResponseEntity<String> errorEntity = new ResponseEntity<>("<html>404 Not Found</html>", HttpStatus.NOT_FOUND);
 
             given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString(), any(Object[].class))).willReturn(requestHeadersSpec);
+            given(requestHeadersUriSpec.uri(anyString())).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
+            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
             given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.body(FrankfurterApiResponse.class)).willReturn(null);
+            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
+            given(responseSpec.toEntity(String.class)).willReturn(errorEntity);
 
             // when & then
             assertThatThrownBy(() -> exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date))

@@ -1,9 +1,12 @@
 package com.splitlink.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.splitlink.dto.response.FrankfurterApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -11,76 +14,80 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
-/**
- * 과거 시점 환율 조회 및 캐싱하는 ExchangeRate-API 연동 서비스
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExchangeRateService {
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
-    /**
-     * 특정 결제 일자(spentDate) 기준 [지출 통화 -> 방 기준 통화] fx_rate 조회
-     */
     @Cacheable(value = "historicalExchangeRates", key = "#paymentCurrency + '_' + #roomBaseCurrency + '_' + #spentDate.toString()")
     public BigDecimal getHistoricalExchangeRate(String paymentCurrency, String roomBaseCurrency, LocalDate spentDate) {
 
-        // 기준 통화와 대상 통화가 동일한 경우 API 호출 없이 1.0 반환
+        // 1. 동일 통화 처리
         if (paymentCurrency.equalsIgnoreCase(roomBaseCurrency)) {
             return BigDecimal.ONE;
         }
 
-        // 유럽 현지 시각(CET) 기준 오늘 날짜 구하기
         LocalDate europeToday = LocalDate.now(ZoneId.of("Europe/Berlin"));
-
-        // 지출일이 유럽 현지 기준 오늘이거나 미래면 아직 공시 전이므로 "latest"로 URL 설정, 과거 날짜면 해당 날짜 문자열 사용
         String datePath = spentDate.isBefore(europeToday) ? spentDate.toString() : "latest";
 
-        try {
-            // 1차 시도: 계산된 datePath로 호출
-            // ExchangeRate-API Historical Endpoint URL 조립
-            String url = String.format("https://api.frankfurter.app/%s?from=%s&to=%s",
-                    datePath,
-                    paymentCurrency.toUpperCase(),
-                    roomBaseCurrency.toUpperCase()
-            );
+        // 1차 시도 (요청 날짜 또는 latest)
+        BigDecimal rate = fetchRateFromApi(datePath, paymentCurrency, roomBaseCurrency);
+        if (rate != null) {
+            log.info("[환율 조회 성공] 요청일: {}, 사용 Endpoint: {}, 환율: {}", spentDate, datePath, rate);
+            return rate;
+        }
 
-            FrankfurterApiResponse response = restClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .body(FrankfurterApiResponse.class);
-
-            if (response != null && response.getRates() != null && response.getRates().containsKey(roomBaseCurrency.toUpperCase())) {
-                BigDecimal fxRate = response.getRates().get(roomBaseCurrency.toUpperCase());
-                log.info("[환율 조회 성공] 요청일: {}, 사용 Endpoint: {}, 환율: {}", spentDate, datePath, fxRate);
-                return fxRate;
-            }
-
-            // 2차 시도 (주말/공휴일 등으로 1차 시도 일자 데이터가 없을 경우): /latest 로 자동 우회
-            log.warn("[환율 특정일자 미공시 -> 최신 환율(/latest]로 우회] 요청일: {}", spentDate);
-            String fallbackUrl = String.format("https://api.frankfurter.app/latest?from=%s&to=%s",
-                    paymentCurrency.toUpperCase(),
-                    roomBaseCurrency.toUpperCase()
-            );
-
-            FrankfurterApiResponse fallbackResponse = restClient.get()
-                    .uri(fallbackUrl)
-                    .retrieve()
-                    .body(FrankfurterApiResponse.class);
-
-            if (fallbackResponse != null && fallbackResponse.getRates() != null) {
-                BigDecimal fxRate = fallbackResponse.getRates().get(roomBaseCurrency.toUpperCase());
-                if (fxRate != null) {
-                    return fxRate;
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Frankfurter API 환율 조회 중 예외 발생 [spentDate: {}]", spentDate, e);
+        // 2차 시도 (1차 실패 시 /latest 로 자동 우회 - 주말/공휴일/시차/HTML 404 대응)
+        log.warn("[환율 특정일자 조회 실패/HTML응답 -> 최신 환율(/latest)로 우회] 요청일: {}", spentDate);
+        BigDecimal fallbackRate = fetchRateFromApi("latest", paymentCurrency, roomBaseCurrency);
+        if (fallbackRate != null) {
+            log.info("[최신 환율(/latest) 우회 성공] 요청일: {}, 환율: {}", spentDate, fallbackRate);
+            return fallbackRate;
         }
 
         throw new IllegalArgumentException("해당 날짜(" + spentDate + ")의 환율 정보를 가져올 수 없습니다.");
+    }
+
+    /**
+     * Frankfurter API 호출 및 안전한 JSON 파싱
+     */
+    private BigDecimal fetchRateFromApi(String datePath, String from, String to) {
+        String url = String.format("https://api.frankfurter.dev/v1/%s?from=%s&to=%s",
+                datePath,
+                from.trim().toUpperCase(),
+                to.trim().toUpperCase()
+        );
+
+        try {
+            log.info("[Frankfurter API 호출 시도] URL: {}", url);
+
+            ResponseEntity<String> response = restClient.get()
+                    .uri(url)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .retrieve()
+                    // 4xx, 5xx 에러 발생 시 예외를 던지지 않고 그대로 응답 객체를 받아오도록 설정
+                    .onStatus(status -> status.isError(), (req, res) -> {
+                        log.warn("[Frankfurter API HTTP 에러 응답] Status: {}, URL: {}", res.getStatusCode(), url);
+                    })
+                    .toEntity(String.class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                FrankfurterApiResponse apiResponse = objectMapper.readValue(response.getBody(), FrankfurterApiResponse.class);
+                if (apiResponse != null && apiResponse.getRates() != null && apiResponse.getRates().containsKey(to.toUpperCase())) {
+                    return apiResponse.getRates().get(to.toUpperCase());
+                } else {
+                    log.warn("[Frankfurter API Rates 데이터 없음] Response Body: {}", response.getBody());
+                }
+            } else {
+                log.warn("[Frankfurter API 호출 비정상] Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+            }
+        } catch (Exception e) {
+            log.error("[Frankfurter API 호출 중 Exception 발생] URL: {}, Error: {}", url, e.getMessage());
+        }
+        return null;
     }
 }
