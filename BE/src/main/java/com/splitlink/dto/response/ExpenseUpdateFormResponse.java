@@ -24,7 +24,13 @@ public class ExpenseUpdateFormResponse {
     private BigDecimal amount;
     private String bankName;
     private String accountNumber;
-    private String currency;
+    
+    // 다통화 및 환산 관련 추가 필드
+    private String currency;                 // 지출 당시 입력 통화 (예: USD)
+    private BigDecimal fxRate;               // 적용된 환율
+    private BigDecimal amountInBaseCurrency; // 방 기준 통화 환산 금액 (amount * fx_rate)
+    private String roomBaseCurrency;         // 방 기준 통화 (예: KRW)
+
     private LocalDateTime spentAt;
 
     // 기존 지정된 결제자 PK 및 참여자 PK 목록

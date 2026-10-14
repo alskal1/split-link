@@ -122,17 +122,21 @@
     <!-- 지출 수정 폼 기본 데이터 조회 -->
     <select id="findExpenseUpdateFormById" resultType="com.splitlink.dto.response.ExpenseUpdateFormResponse">
         SELECT
-            expense_id AS expenseId,
-            title,
-            amount,
-            bank_name,
-            account_number,
-            currency,
-            spent_at AS spentAt,
-            payer_id AS payerId
-        FROM expenses
-        WHERE expense_id = #{expenseId}
-          AND room_id = #{roomId}
+            e.expense_id AS expenseId,
+            e.title,
+            e.amount,
+            e.bank_name AS bankName,
+            e.account_number AS accountNumber,
+            e.currency,
+            e.fx_rate AS fxRate,
+            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 2) AS amountInBaseCurrency,
+            r.base_currency AS roomBaseCurrency,
+            e.spent_at AS spentAt,
+            e.payer_id AS payerId
+        FROM expenses e
+        JOIN rooms r ON e.room_id = r.room_id
+        WHERE e.expense_id = #{expenseId}
+          AND e.room_id = #{roomId}
     </select>
 
     <!-- 해당 지출에 참여한 멤버 PK 목록 조회 -->

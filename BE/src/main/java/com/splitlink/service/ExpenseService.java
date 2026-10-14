@@ -187,7 +187,7 @@ public class ExpenseService {
         // 방 존재 및 접근 권한 검증 + roomId 가져오기
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
 
-        // 상단 헤더 데이터 조회 (방 제목, 사용자 이름, isLocked)
+        // 상단 헤더 데이터 조회 (방 제목, 사용자 이름, baseCurrency, isLocked)
         RoomMapper.ExpenseListHeaderData headerData = roomMapper.getExpenseListHeaderData(roomId, memberId);
 
         // 방 전체 총 지출 금액 조회 (null 방지 처리)
@@ -234,10 +234,10 @@ public class ExpenseService {
         // 하단 지출 내역 목록 조회 (결제자 이름, 참여자 수, 본인 결제 여부 포함)
         List<ExpenseListResponse.ExpenseItemResponse> expenses = expenseMapper.findExpenseItems(roomId, memberId);
 
-        // 반환
         return ExpenseListResponse.builder()
                 .roomTitle(headerData.getRoomTitle())
                 .currentMemberName(headerData.getMemberName())
+                .roomBaseCurrency(headerData.getBaseCurrency())
                 .isLocked(headerData.isLocked())
                 .totalExpenseAmount(totalExpenseAmount)
                 .settlementStatus(settlementStatus)
@@ -278,6 +278,8 @@ public class ExpenseService {
                 .amount(detail.getAmount())
                 .currency(detail.getCurrency())
                 .fxRate(detail.getFxRate())
+                .amountInBaseCurrency(detail.getAmountInBaseCurrency())
+                .roomBaseCurrency(detail.getRoomBaseCurrency())
                 .spentAt(detail.getSpentAt())
                 .payerId(detail.getPayerId())
                 .payerName(detail.getPayerName())
@@ -335,6 +337,9 @@ public class ExpenseService {
                 .title(form.getTitle())
                 .amount(form.getAmount())
                 .currency(form.getCurrency())
+                .fxRate(form.getFxRate())
+                .amountInBaseCurrency(form.getAmountInBaseCurrency())
+                .roomBaseCurrency(form.getRoomBaseCurrency())
                 .bankName(form.getBankName())
                 .accountNumber(decryptedAccount)
                 .spentAt(form.getSpentAt())
