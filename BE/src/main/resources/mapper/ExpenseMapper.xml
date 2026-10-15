@@ -109,7 +109,7 @@
         SELECT
             es.member_id AS memberId,
             m.name,
-            ROUND(es.amount * IFNULL(e.fx_rate, 1.0), 0) AS shareAmount,
+            ROUND(es.amount, 0) AS shareAmount,
             CASE WHEN es.member_id = #{memberId} THEN TRUE ELSE FALSE END AS isSelf
         FROM expense_shares es
         JOIN members m ON es.member_id = m.member_id
@@ -129,7 +129,7 @@
             e.account_number AS accountNumber,
             e.currency,
             e.fx_rate AS fxRate,
-            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 2) AS amountInBaseCurrency,
+            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
             r.base_currency AS roomBaseCurrency,
             e.spent_at AS spentAt,
             e.payer_id AS payerId
@@ -163,7 +163,7 @@
         ) p ON m.member_id = p.payer_id
         -- [B] 멤버별 부담해야 할 금액 (Shared)
         LEFT JOIN (
-            SELECT es.member_id, SUM(es.amount * IFNULL(e.fx_rate, 1.0)) AS total_shared
+            SELECT es.member_id, SUM(es.amount) AS total_shared
             FROM expense_shares es
             INNER JOIN expenses e ON es.expense_id = e.expense_id
             WHERE e.room_id = #{roomId}
