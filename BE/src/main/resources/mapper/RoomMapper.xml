@@ -117,6 +117,7 @@
         SELECT
             r.title AS roomTitle,
             m.name AS memberName,
+            r.base_currency AS baseCurrency,
             r.is_locked AS isLocked
         FROM rooms r
         INNER JOIN members m ON r.room_id = m.room_id
@@ -137,6 +138,7 @@
     <select id="findRoomBySlugAndMemberId" resultType="com.splitlink.entity.Room">
         SELECT
             r.room_id AS roomId,
+            r.base_currency AS baseCurrency,
             r.is_locked AS isLocked,
             r.is_closed AS isClosed
         FROM rooms r

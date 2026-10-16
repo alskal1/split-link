@@ -44,6 +44,13 @@ public class ExpenseUpdateRequest {
     )
     private String accountNumber;
 
+    /**
+     * 결제 통화 (해외결제 미체크 시 null 또는 빈 값으로 전송될 수 있음)
+     * 값이 들어올 경우에만 ISO 4217 알파벳 3자리 대소문자 검증
+     */
+    @Pattern(regexp = "^$|^[a-zA-Z]{3}$", message = "통화 코드는 영문 3자리(ISO 4217)여야 합니다.")
+    private String currency;
+
     @NotNull(message = "결제 일시를 입력해 주세요.")
     private LocalDateTime spentAt;
 

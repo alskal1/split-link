@@ -68,6 +68,8 @@ public interface ExpenseMapper {
                       @Param("amount") BigDecimal amount,
                       @Param("bankName") String bankName,
                       @Param("accountNumber") String accountNumber,
+                      @Param("currency") String currency,
+                      @Param("fxRate") BigDecimal fxRate,
                       @Param("spentAt") LocalDateTime spentAt);
 
     /** 특정 지출의 기존 부담금(expense_shares) 일괄 삭제 */

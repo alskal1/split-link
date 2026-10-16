@@ -78,7 +78,9 @@ public class SettlementService {
     public RoomMySettlementResponse getMySettlement(String slug, Long memberId) {
 
         // 방 존재 여부 및 접근 권한 검증 -> roomId 반환
-        Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
+        Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
+        Long roomId = room.getRoomId();
+        String roomBaseCurrency = room.getBaseCurrency();
 
         // 총 보낼 금액 / 받을 금액 요약 조회
         SettlementMapper.SettlementSummary summary = settlementMapper.findSettlementSummary(roomId, memberId);
@@ -89,26 +91,29 @@ public class SettlementService {
 
         // SendItem 내 토스 송금 딥링크(remittanceLink) 가공 세팅
         if (sendList != null && !sendList.isEmpty()) {
+            boolean isKrwRoom = "KRW".equalsIgnoreCase(roomBaseCurrency);
+
             sendList.forEach(item -> {
-
-                // DB에서 꺼내온 암호화 계좌번호 복호화
                 String decryptedAccount = encryptionUtil.decrypt(item.getAccountNumber());
-
-                // 응답 DTO의 계좌번호 필드를 평문으로 교체
                 item.setAccountNumber(decryptedAccount);
 
-                // 복호화된 계좌번호로 딥링크 생성
-                String link = remittanceLinkGenerator.generateTossLink(
-                        item.getBankName(),
-                        decryptedAccount,
-                        item.getAmount()
-                );
-                item.setRemittanceLink(link);
+                // 원화(KRW) 정산방인 경우에만 토스 딥링크 생성
+                if (isKrwRoom) {
+                    String link = remittanceLinkGenerator.generateTossLink(
+                            item.getBankName(),
+                            decryptedAccount,
+                            item.getAmount()
+                    );
+                    item.setRemittanceLink(link);
+                } else {
+                    item.setRemittanceLink(null);
+                }
             });
         }
 
         // 응답 DTO 조립
         return RoomMySettlementResponse.builder()
+                .roomBaseCurrency(roomBaseCurrency)
                 .totalSendAmount(summary != null ? summary.getTotalSendAmount() : BigDecimal.ZERO)
                 .totalReceiveAmount(summary != null ? summary.getTotalReceiveAmount() : BigDecimal.ZERO)
                 .sendList(sendList)

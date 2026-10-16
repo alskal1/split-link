@@ -37,7 +37,7 @@ CREATE TABLE expenses (
                           CONSTRAINT fk_expenses_room FOREIGN KEY (room_id)
                               REFERENCES rooms(room_id) ON DELETE CASCADE,
                           CONSTRAINT fk_expenses_payer FOREIGN KEY (payer_id)
-                              REFERENCES members(member_id) ON DELETE RESTRICT
+                              REFERENCES members(member_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='지출 내역';
 
 -- 4. expense_shares (지출별 멤버 부담금 테이블)

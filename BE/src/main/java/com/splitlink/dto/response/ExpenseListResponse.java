@@ -28,7 +28,10 @@ public class ExpenseListResponse {
     @Getter(onMethod_ = {@JsonProperty("isLocked")})
     private boolean isLocked;
 
-    /** 방 전체 총 지출 금액 */
+    /** 방 기준 통화 - 상단 총액 및 정산 금액의 단위 기준 */
+    private String roomBaseCurrency;
+
+    /** 방 전체 총 지출 금액 (방 기준 통화 환산 합계) */
     private BigDecimal totalExpenseAmount;
 
     /**
@@ -73,8 +76,17 @@ public class ExpenseListResponse {
         /** 지출 항목명 */
         private String title;
 
-        /** 결제 금액 */
+        /** 지출 결제 금액 (외화) */
         private BigDecimal amount;
+
+        /** 지출 결제 통화 */
+        private String currency;
+
+        /** 적용 환율 */
+        private BigDecimal fxRate;
+
+        /** 방 기준 통화 환산 금액 */
+        private BigDecimal amountInBaseCurrency;
 
         /** 결제자 이름 */
         private String payerName;

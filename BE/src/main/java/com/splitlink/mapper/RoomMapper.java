@@ -81,6 +81,7 @@ public interface RoomMapper {
     class ExpenseListHeaderData {
         private String roomTitle;
         private String memberName;
+        private String baseCurrency;
         private boolean isLocked;
     }
 

@@ -8,6 +8,7 @@ import com.splitlink.dto.response.ExpenseDetailResponse;
 import com.splitlink.dto.response.ExpenseFormInitResponse;
 import com.splitlink.dto.response.ExpenseListResponse;
 import com.splitlink.dto.response.ExpenseUpdateFormResponse;
+import com.splitlink.entity.Room;
 import com.splitlink.mapper.ExpenseMapper;
 import com.splitlink.mapper.MemberMapper;
 import com.splitlink.mapper.RoomMapper;
@@ -57,6 +58,9 @@ public class ExpenseServiceTest {
     @Mock
     private EncryptionUtil encryptionUtil;
 
+    @Mock
+    private ExchangeRateService exchangeRateService;
+
     @Nested
     @DisplayName("지출 폼 초기화 데이터 조회 (getExpenseFormInit)")
     class GetExpenseFormInitTest {
@@ -93,12 +97,10 @@ public class ExpenseServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.getCurrentMemberId()).isEqualTo(memberId);
 
-            // 계좌 검증 (복호화된 평문인지 확인)
             assertThat(response.getDefaultAccount()).isNotNull();
             assertThat(response.getDefaultAccount().getBankName()).isEqualTo("카카오뱅크");
             assertThat(response.getDefaultAccount().getAccountNumber()).isEqualTo(decryptedAccount);
 
-            // 멤버 목록 검증
             assertThat(response.getRoomMembers()).hasSize(2);
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
@@ -152,7 +154,7 @@ public class ExpenseServiceTest {
     class CreateExpensesTest {
 
         @Test
-        @DisplayName("성공: 계좌번호를 암호화하여 저장하며, 1/N 정산 시 오차가 첫 번째 참여자에게 가산된다.")
+        @DisplayName("성공: 계좌번호를 암호화하여 저장하며, 환율(1.0) 기반 1/N 정산 시 오차가 첫 번째 참여자에게 가산된다.")
         void createExpensesRemainderAddedToFirstMember() {
             // given
             String slug = "test-slug";
@@ -160,6 +162,7 @@ public class ExpenseServiceTest {
             Long roomId = 10L;
             String rawAccount = "3333-12-345678";
             String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
 
             ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
                     .title("저녁 식사")
@@ -169,7 +172,7 @@ public class ExpenseServiceTest {
 
             ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
                     .payerId(1L)
-                    .spentAt(LocalDateTime.now())
+                    .spentAt(spentAt)
                     .currency("KRW")
                     .bankName("카카오뱅크")
                     .accountNumber(rawAccount)
@@ -180,14 +183,17 @@ public class ExpenseServiceTest {
                     .expenseGroups(List.of(group))
                     .build();
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
             given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate()))
+                    .willReturn(BigDecimal.ONE);
 
             // when
             expenseService.createExpenses(slug, currentMemberId, request);
@@ -204,9 +210,66 @@ public class ExpenseServiceTest {
             assertThat(shares.get(1).getAmount()).isEqualTo(new BigDecimal("3333"));
             assertThat(shares.get(2).getAmount()).isEqualTo(new BigDecimal("3333"));
 
-            // 암호화된 계좌로 memberMapper.updateAccountInfo가 호출되는지 검증
             verify(encryptionUtil).encrypt(rawAccount);
             verify(memberMapper).updateAccountInfo(1L, "카카오뱅크", encryptedAccount);
+            verify(exchangeRateService).getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate());
+        }
+
+        @Test
+        @DisplayName("성공: 외화(USD) 결제 시 환율을 적용하여 1/N 부담금을 방 기준 통화로 환산해 저장한다.")
+        void createExpensesWithForeignCurrency() {
+            // given
+            String slug = "test-slug";
+            Long currentMemberId = 1L;
+            Long roomId = 10L;
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
+
+            ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("미국 스테이크 식사")
+                    .amount(new BigDecimal("100")) // 100 USD
+                    .targetMemberIds(List.of(1L, 2L))
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(1L)
+                    .spentAt(spentAt)
+                    .currency("USD")
+                    .bankName("카카오뱅크")
+                    .accountNumber(rawAccount)
+                    .items(List.of(item))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("USD", "KRW", spentAt.toLocalDate()))
+                    .willReturn(new BigDecimal("1350.00"));
+
+            // when
+            expenseService.createExpenses(slug, currentMemberId, request);
+
+            // then
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<ExpenseMapper.ExpenseShareParam>> captor = ArgumentCaptor.forClass(List.class);
+            verify(expenseMapper).insertExpenseShares(captor.capture());
+
+            List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
+
+            assertThat(shares).hasSize(2);
+            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("67500"));
+            assertThat(shares.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("67500"));
         }
 
         @Test
@@ -237,13 +300,14 @@ public class ExpenseServiceTest {
                     .expenseGroups(List.of(group))
                     .build();
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
 
             doThrow(new IllegalArgumentException("해당 방에 속하지 않은 참여자가 포함되어 있습니다."))
                     .when(roomAccessValidator).validateMembersInRoom(eq(roomId), anyList());
@@ -266,13 +330,14 @@ public class ExpenseServiceTest {
                     .expenseGroups(List.of())
                     .build();
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(true)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
 
             // when & then
             assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
@@ -292,13 +357,14 @@ public class ExpenseServiceTest {
                     .expenseGroups(List.of())
                     .build();
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(true)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
 
             // when & then
             assertThatThrownBy(() -> expenseService.createExpenses(slug, currentMemberId, request))
@@ -322,6 +388,7 @@ public class ExpenseServiceTest {
             RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
                     .roomTitle("일본 여행 정산방")
                     .memberName("스펀지밥")
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .build();
 
@@ -329,6 +396,9 @@ public class ExpenseServiceTest {
                     .expenseId(3L)
                     .title("후식 메론")
                     .amount(new BigDecimal("15000"))
+                    .currency("KRW")
+                    .fxRate(BigDecimal.ONE)
+                    .amountInBaseCurrency(new BigDecimal("15000"))
                     .payerName("스펀지밥")
                     .targetMemberCount(2)
                     .isMyPayment(true)
@@ -338,6 +408,9 @@ public class ExpenseServiceTest {
                     .expenseId(2L)
                     .title("점심 돈까스")
                     .amount(new BigDecimal("30000"))
+                    .currency("KRW")
+                    .fxRate(BigDecimal.ONE)
+                    .amountInBaseCurrency(new BigDecimal("30000"))
                     .payerName("스펀지밥")
                     .targetMemberCount(2)
                     .isMyPayment(true)
@@ -355,11 +428,13 @@ public class ExpenseServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.getRoomTitle()).isEqualTo("일본 여행 정산방");
             assertThat(response.getCurrentMemberName()).isEqualTo("스펀지밥");
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
             assertThat(response.getTotalExpenseAmount()).isEqualByComparingTo(new BigDecimal("45000"));
             assertThat(response.isLocked()).isFalse();
 
             assertThat(response.getExpenses()).hasSize(2);
             assertThat(response.getExpenses().get(0).getExpenseId()).isEqualTo(3L);
+            assertThat(response.getExpenses().get(0).getAmountInBaseCurrency()).isEqualByComparingTo(new BigDecimal("15000"));
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, currentMemberId);
             verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
@@ -377,7 +452,13 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
 
-            RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기영", true);
+            RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
+                    .roomTitle("테스트방")
+                    .memberName("기영")
+                    .baseCurrency("KRW")
+                    .isLocked(true)
+                    .build();
+
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
             given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
 
@@ -391,6 +472,7 @@ public class ExpenseServiceTest {
             // then
             assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.SEND);
             assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
         }
 
         @Test
@@ -403,7 +485,13 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
 
-            RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "기철", true);
+            RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
+                    .roomTitle("테스트방")
+                    .memberName("기철")
+                    .baseCurrency("KRW")
+                    .isLocked(true)
+                    .build();
+
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
             given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
 
@@ -417,6 +505,7 @@ public class ExpenseServiceTest {
             // then
             assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.RECEIVE);
             assertThat(response.getMySettlementAmount()).isEqualByComparingTo(new BigDecimal("5000"));
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
         }
 
         @Test
@@ -429,7 +518,13 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
 
-            RoomMapper.ExpenseListHeaderData headerData = new RoomMapper.ExpenseListHeaderData("테스트방", "오덕", true);
+            RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
+                    .roomTitle("테스트방")
+                    .memberName("오덕")
+                    .baseCurrency("KRW")
+                    .isLocked(true)
+                    .build();
+
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
             given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
 
@@ -443,6 +538,51 @@ public class ExpenseServiceTest {
             // then
             assertThat(response.getSettlementStatus()).isEqualTo(ExpenseListResponse.SettlementStatus.ZERO);
             assertThat(response.getMySettlementAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
+        }
+
+        @Test
+        @DisplayName("성공: 외화(USD) 지출이 포함된 경우 방 기준 통화(KRW) 및 환산액(amountInBaseCurrency)이 올바르게 매핑되어 반환된다.")
+        void getExpenseListWithForeignCurrencySuccess() {
+            // given
+            String slug = "test-room-slug";
+            Long currentMemberId = 1L;
+            Long roomId = 10L;
+
+            RoomMapper.ExpenseListHeaderData headerData = RoomMapper.ExpenseListHeaderData.builder()
+                    .roomTitle("미국 여행 정산방")
+                    .memberName("스펀지밥")
+                    .baseCurrency("KRW")
+                    .isLocked(false)
+                    .build();
+
+            ExpenseListResponse.ExpenseItemResponse foreignItem = ExpenseListResponse.ExpenseItemResponse.builder()
+                    .expenseId(1L)
+                    .title("뉴욕 버거")
+                    .amount(new BigDecimal("100.00"))
+                    .currency("USD")
+                    .fxRate(new BigDecimal("1350.00"))
+                    .amountInBaseCurrency(new BigDecimal("135000"))
+                    .payerName("스펀지밥")
+                    .targetMemberCount(2)
+                    .isMyPayment(true)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
+            given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("135000"));
+            given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(foreignItem));
+
+            // when
+            ExpenseListResponse response = expenseService.getExpenseList(slug, currentMemberId);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
+            assertThat(response.getExpenses()).hasSize(1);
+            assertThat(response.getExpenses().get(0).getCurrency()).isEqualTo("USD");
+            assertThat(response.getExpenses().get(0).getFxRate()).isEqualByComparingTo(new BigDecimal("1350.00"));
+            assertThat(response.getExpenses().get(0).getAmountInBaseCurrency()).isEqualByComparingTo(new BigDecimal("135000"));
         }
     }
 
@@ -470,6 +610,8 @@ public class ExpenseServiceTest {
                     .amount(new BigDecimal("30000.00"))
                     .currency("KRW")
                     .fxRate(BigDecimal.ONE)
+                    .amountInBaseCurrency(new BigDecimal("30000.00"))
+                    .roomBaseCurrency("KRW")
                     .spentAt(LocalDateTime.of(2026, 9, 9, 18, 30))
                     .payerId(38L)
                     .payerName("스펀지밥")
@@ -509,6 +651,8 @@ public class ExpenseServiceTest {
             assertThat(result.getPayerName()).isEqualTo("스펀지밥");
             assertThat(result.getBankName()).isEqualTo("카카오뱅크");
             assertThat(result.getAccountNumber()).isEqualTo(decryptedAccount);
+            assertThat(result.getAmountInBaseCurrency()).isEqualByComparingTo(new BigDecimal("30000.00"));
+            assertThat(result.getRoomBaseCurrency()).isEqualTo("KRW");
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
@@ -544,7 +688,7 @@ public class ExpenseServiceTest {
         private final Long memberId = 1L;
 
         @Test
-        @DisplayName("성공: 지출 수정 폼 데이터 조회 시 암호화된 계좌번호를 복호화하여 반환한다.")
+        @DisplayName("성공: 지출 수정 폼 데이터 조회 시 암호화된 계좌번호 복호화, 통화, 환율, 방 기준 통화 및 멤버 목록을 포함하여 반환한다.")
         void getExpenseUpdateForm_Success() {
             // given
             String encryptedAccount = "EncryptedAccountText123";
@@ -561,16 +705,20 @@ public class ExpenseServiceTest {
             ExpenseUpdateFormResponse mockForm = ExpenseUpdateFormResponse.builder()
                     .expenseId(expenseId)
                     .title("돈까스 정식")
-                    .amount(new BigDecimal("25000"))
+                    .amount(new BigDecimal("25.00"))
                     .bankName("카카오뱅크")
                     .accountNumber(encryptedAccount)
-                    .currency("KRW")
+                    .currency("USD")
+                    .fxRate(new BigDecimal("1350.00"))
+                    .amountInBaseCurrency(new BigDecimal("33750.00"))
+                    .roomBaseCurrency("KRW")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
                     .payerId(1L)
                     .build();
 
             List<Long> mockTargetMemberIds = List.of(1L, 2L);
 
+            // ★ MemberMapper 반환 타입(ExpenseFormInitResponse.MemberInfo)에 맞게 변경
             List<ExpenseFormInitResponse.MemberInfo> mockRoomMembers = List.of(
                     ExpenseFormInitResponse.MemberInfo.builder()
                             .memberId(1L)
@@ -600,9 +748,18 @@ public class ExpenseServiceTest {
             // then
             assertThat(result).isNotNull();
             assertThat(result.getExpenseId()).isEqualTo(expenseId);
+            assertThat(result.getTitle()).isEqualTo("돈까스 정식");
             assertThat(result.getBankName()).isEqualTo("카카오뱅크");
             assertThat(result.getAccountNumber()).isEqualTo(decryptedAccount);
+            assertThat(result.getCurrency()).isEqualTo("USD");
+            assertThat(result.getFxRate()).isEqualByComparingTo(new BigDecimal("1350.00"));
+            assertThat(result.getAmountInBaseCurrency()).isEqualByComparingTo(new BigDecimal("33750.00"));
+            assertThat(result.getRoomBaseCurrency()).isEqualTo("KRW");
             assertThat(result.getTargetMemberIds()).containsExactly(1L, 2L);
+
+            // 최종 응답 DTO(ExpenseUpdateFormResponse.MemberInfo) 검증
+            assertThat(result.getRoomMembers()).hasSize(2);
+            assertThat(result.getRoomMembers().get(0).getName()).isEqualTo("스펀지밥");
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(roomMapper).findRoomStatusBySlug(slug);
@@ -703,11 +860,12 @@ public class ExpenseServiceTest {
         private final Long expenseId = 1L;
         private final Long memberId = 100L;
 
-        private ExpenseUpdateRequest createRequest(Long payerId, List<Long> targetMemberIds) {
+        private ExpenseUpdateRequest createRequest(Long payerId, List<Long> targetMemberIds, String currency) {
             return ExpenseUpdateRequest.builder()
                     .payerId(payerId)
                     .title("수정된 점심 식사")
                     .amount(new BigDecimal("30000"))
+                    .currency(currency)
                     .bankName("카카오뱅크")
                     .accountNumber("3333-12-345678")
                     .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
@@ -716,27 +874,31 @@ public class ExpenseServiceTest {
         }
 
         @Test
-        @DisplayName("성공: 입력받은 계좌번호를 암호화하여 지출 및 결제자 계좌를 수정하고 부담금을 재등록한다.")
+        @DisplayName("성공: 입력받은 계좌번호를 암호화하여 지출 및 결제자 계좌를 수정하고, 환율(1.0) 기반 부담금을 재등록한다.")
         void updateExpense_Success() {
             // given
             String rawAccount = "3333-12-345678";
             String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
 
-            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), "KRW");
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
             given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate()))
+                    .willReturn(BigDecimal.ONE);
 
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
-                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             )).willReturn(1);
 
             given(expenseMapper.deleteExpenseSharesByExpenseId(expenseId)).willReturn(2);
@@ -745,33 +907,86 @@ public class ExpenseServiceTest {
             expenseService.updateExpense(slug, expenseId, memberId, request);
 
             // then
-            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
-            verify(roomMapper).findRoomStatusBySlug(slug);
+            verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
             verify(roomAccessValidator).validateMembersInRoom(eq(roomId), anyList());
             verify(encryptionUtil).encrypt(rawAccount);
             verify(memberMapper).updateAccountInfo(100L, "카카오뱅크", encryptedAccount);
+            verify(exchangeRateService).getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate());
             verify(expenseMapper).updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
-                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             );
             verify(expenseMapper).deleteExpenseSharesByExpenseId(expenseId);
             verify(expenseMapper).insertExpenseShares(anyList());
         }
 
         @Test
+        @DisplayName("성공: 외화(USD) 수정 시 새로운 환율을 적용하여 지출 정보 및 부담금을 재등록한다.")
+        void updateExpense_WithForeignCurrency_Success() {
+            // given
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
+            BigDecimal usdRate = new BigDecimal("1350.00");
+
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), "USD");
+
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("USD", "KRW", spentAt.toLocalDate()))
+                    .willReturn(usdRate);
+
+            given(expenseMapper.updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("USD"), eq(usdRate), eq(spentAt)
+            )).willReturn(1);
+
+            given(expenseMapper.deleteExpenseSharesByExpenseId(expenseId)).willReturn(2);
+
+            // when
+            expenseService.updateExpense(slug, expenseId, memberId, request);
+
+            // then
+            verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
+            verify(exchangeRateService).getHistoricalExchangeRate("USD", "KRW", spentAt.toLocalDate());
+            verify(expenseMapper).updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("USD"), eq(usdRate), eq(spentAt)
+            );
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<ExpenseMapper.ExpenseShareParam>> captor = ArgumentCaptor.forClass(List.class);
+            verify(expenseMapper).insertExpenseShares(captor.capture());
+
+            List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
+            assertThat(shares).hasSize(2);
+            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("20250000.00"));
+        }
+
+        @Test
         @DisplayName("예외: 정산 완료(isClosed=true) 상태인 경우 예외가 발생한다.")
         void updateExpense_ThrowExceptionWhenRoomIsClosed() {
             // given
-            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), "KRW");
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(true)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
 
             // when & then
             assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
@@ -783,15 +998,16 @@ public class ExpenseServiceTest {
         @DisplayName("예외: 지출 입력 완료(isLocked=true) 상태인 경우 예외가 발생한다.")
         void updateExpense_ThrowExceptionWhenRoomIsLocked() {
             // given
-            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), "KRW");
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(true)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
 
             // when & then
             assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
@@ -805,28 +1021,72 @@ public class ExpenseServiceTest {
             // given
             String rawAccount = "3333-12-345678";
             String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
 
-            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L));
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), "KRW");
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-
-            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
                     .isLocked(false)
                     .isClosed(false)
                     .build();
-            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
             given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate()))
+                    .willReturn(BigDecimal.ONE);
 
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
-                    eq("카카오뱅크"), eq(encryptedAccount), eq(request.getSpentAt())
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             )).willReturn(0);
 
             // when & then
             assertThatThrownBy(() -> expenseService.updateExpense(slug, expenseId, memberId, request))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
+        }
+
+        @Test
+        @DisplayName("성공: 요청 currency가 null이거나 빈 값인 경우 방 기준 통화(KRW)로 자동 적용되어 환율을 조회한다.")
+        void updateExpense_WithNullCurrency_UseBaseCurrency() {
+            // given
+            String rawAccount = "3333-12-345678";
+            String encryptedAccount = "EncryptedAccountText123";
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
+
+            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), null);
+
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
+            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
+            given(exchangeRateService.getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate()))
+                    .willReturn(BigDecimal.ONE);
+
+            given(expenseMapper.updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
+            )).willReturn(1);
+
+            // when
+            expenseService.updateExpense(slug, expenseId, memberId, request);
+
+            // then
+            verify(exchangeRateService).getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate());
+            verify(expenseMapper).updateExpense(
+                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
+                    eq(request.getTitle()), eq(request.getAmount()),
+                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
+            );
         }
     }
 
