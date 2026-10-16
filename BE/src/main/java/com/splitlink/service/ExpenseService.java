@@ -143,8 +143,9 @@ public class ExpenseService {
             // 결제자 그룹 내 세부 지출 항목 등록
             for (ExpenseBatchCreateRequest.ExpenseItemRequest item : group.getItems()) {
 
+                // TODO: 곱한 금액을 방 통화에 맞게 소수점 자리수 반올림
                 // 외화 금액 * 환율 = 방 기준 통화 금액 (외화 금액 * fx_rate)
-                BigDecimal convertedTotalAmount = item.getAmount().multiply(fxRate);
+                BigDecimal convertedTotalAmount = convertToBaseCurrency(item.getAmount(), fxRate, roomBaseCurrency);
 
                 Expense expense = Expense.builder()
                         .roomId(roomId)
@@ -191,7 +192,6 @@ public class ExpenseService {
         RoomMapper.ExpenseListHeaderData headerData = roomMapper.getExpenseListHeaderData(roomId, memberId);
 
         // 방 전체 총 지출 금액 조회 (null 방지 처리)
-        // 일단은 한화로 진행
         BigDecimal totalExpenseAmount = expenseMapper.findTotalExpenseAmountByRoomId(roomId);
         if (totalExpenseAmount == null) {
             totalExpenseAmount = BigDecimal.ZERO;
@@ -420,7 +420,7 @@ public class ExpenseService {
         expenseMapper.deleteExpenseSharesByExpenseId(expenseId);
 
         // 방 기준 통화 환산 금액(외화 금액 * fxRate)으로 1/N 부담금 재계산 및 Bulk Insert
-        BigDecimal convertedTotalAmount = request.getAmount().multiply(fxRate);
+        BigDecimal convertedTotalAmount = convertToBaseCurrency(request.getAmount(), fxRate, roomBaseCurrency);
 
         List<ExpenseMapper.ExpenseShareParam> newShares = calculateShares(
                 expenseId,
@@ -489,5 +489,32 @@ public class ExpenseService {
         }
 
         return shares;
+    }
+
+    /**
+     * 통화 별 소수점 자리 맞추기
+     *
+     * @param currency
+     * @return
+     */
+    private int getCurrencyScale(String currency) {
+        return switch (currency) {
+            case "KRW", "JPY" -> 0;
+            case "USD", "EUR" -> 2;
+            default -> throw new IllegalArgumentException("지원하지 않는 통화입니다.: " + currency);
+        };
+    }
+
+    /**
+     * 방 기준 통화로 총 금액 계산
+     *
+     * @param amount
+     * @param fxRate
+     * @param baseCurrency
+     * @return
+     */
+    private BigDecimal convertToBaseCurrency(BigDecimal amount, BigDecimal fxRate, String baseCurrency) {
+        return amount.multiply(fxRate)
+                .setScale(getCurrencyScale(baseCurrency), RoundingMode.HALF_UP);
     }
 }
