@@ -4,7 +4,10 @@ import com.splitlink.common.util.EncryptionUtil;
 import com.splitlink.common.validator.RoomAccessValidator;
 import com.splitlink.dto.request.ExpenseBatchCreateRequest;
 import com.splitlink.dto.request.ExpenseUpdateRequest;
-import com.splitlink.dto.response.*;
+import com.splitlink.dto.response.ExpenseDetailResponse;
+import com.splitlink.dto.response.ExpenseFormInitResponse;
+import com.splitlink.dto.response.ExpenseListResponse;
+import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.entity.Expense;
 import com.splitlink.entity.Room;
 import com.splitlink.mapper.ExpenseMapper;
@@ -103,9 +106,7 @@ public class ExpenseService {
         }
 
         // 방 기준 정산 통화 세팅
-        String roomBaseCurrency = (room.getBaseCurrency() == null || room.getBaseCurrency().isBlank())
-                ? "KRW"
-                : room.getBaseCurrency();
+        String roomBaseCurrency = room.getBaseCurrency().trim().toUpperCase();
 
         // 요청 데이터 내의 모든 payerId와 targetMemberIds 수집 및 방 소속 검증
         Set<Long> allRequestMemberIds = new HashSet<>();
@@ -143,7 +144,6 @@ public class ExpenseService {
             // 결제자 그룹 내 세부 지출 항목 등록
             for (ExpenseBatchCreateRequest.ExpenseItemRequest item : group.getItems()) {
 
-                // TODO: 곱한 금액을 방 통화에 맞게 소수점 자리수 반올림
                 // 외화 금액 * 환율 = 방 기준 통화 금액 (외화 금액 * fx_rate)
                 BigDecimal convertedTotalAmount = convertToBaseCurrency(item.getAmount(), fxRate, roomBaseCurrency);
 
@@ -165,6 +165,7 @@ public class ExpenseService {
                 // 1/N 부담금 계산 시 '방 기준 통화 환산액(convertedTotalAmount)' 전달
                 List<ExpenseMapper.ExpenseShareParam> shares = calculateShares(
                         expense.getExpenseId(),
+                        roomBaseCurrency,
                         convertedTotalAmount,
                         item.getTargetMemberIds()
                 );
@@ -373,9 +374,7 @@ public class ExpenseService {
         }
 
         // 방 기준 정산 통화 세팅
-        String roomBaseCurrency = (room.getBaseCurrency() == null || room.getBaseCurrency().isBlank())
-                ? "KRW"
-                : room.getBaseCurrency();
+        String roomBaseCurrency = room.getBaseCurrency().trim().toUpperCase();
 
         // 요청 바디의 payerId 및 targetMemberIds가 해당 방 소속 멤버인지 일괄 검증 (IDOR 방지)
         Set<Long> requestMemberIds = new HashSet<>(request.getTargetMemberIds());
@@ -386,10 +385,8 @@ public class ExpenseService {
         String encryptedAccount = encryptionUtil.encrypt(request.getAccountNumber());
         memberMapper.updateAccountInfo(request.getPayerId(), request.getBankName(), encryptedAccount);
 
-        // 결제 통화 지정 (전달받은 통화가 없으면 방 기준 통화 사용)
-        String paymentCurrency = (request.getCurrency() == null || request.getCurrency().isBlank())
-                ? roomBaseCurrency
-                : request.getCurrency().trim().toUpperCase();
+        // 결제 통화 지정
+        String paymentCurrency = request.getCurrency().trim().toUpperCase();
 
         // 결제 일자 기준 [결제 통화 -> 방 기준 통화] fx_rate 조회
         BigDecimal fxRate = exchangeRateService.getHistoricalExchangeRate(
@@ -424,6 +421,7 @@ public class ExpenseService {
 
         List<ExpenseMapper.ExpenseShareParam> newShares = calculateShares(
                 expenseId,
+                roomBaseCurrency,
                 convertedTotalAmount,
                 request.getTargetMemberIds()
         );
@@ -468,11 +466,18 @@ public class ExpenseService {
      * 1/N 부담금 계산 및 1원 오차 보정 헬퍼 메서드
      * (소수점 버림 후 남은 차액은 첫 번째 참여자에게 가산)
      */
-    private List<ExpenseMapper.ExpenseShareParam> calculateShares(Long expenseId, BigDecimal totalAmount, List<Long> memberIds) {
+    private List<ExpenseMapper.ExpenseShareParam> calculateShares(Long expenseId, String baseCurrency, BigDecimal totalAmount, List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            throw new IllegalArgumentException("지출 부담 참여자는 최소 1명이어야 합니다.");
+        }
+
         int memberCount = memberIds.size();
 
+        // 통화 별 소수점 자리수 설정
+        int scale = getCurrencyScale(baseCurrency);
+
         // 소수점 아래 버림 처리 (예: 10,000 / 3 = 3,333)
-        BigDecimal baseAmount = totalAmount.divide(new BigDecimal(memberCount), 0, RoundingMode.DOWN);
+        BigDecimal baseAmount = totalAmount.divide(new BigDecimal(memberCount), scale, RoundingMode.DOWN);
 
         // 남은 오차 금액 계산 (예: 10,000 - (3,333 * 3) = 1)
         BigDecimal remainder = totalAmount.subtract(baseAmount.multiply(new BigDecimal(memberCount)));

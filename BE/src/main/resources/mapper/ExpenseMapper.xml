@@ -51,7 +51,7 @@
 
     <!-- 방 전체 총 지출 합계 -->
     <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
-        SELECT IFNULL(SUM(amount * IFNULL(fx_rate, 1.0)), 0)
+        SELECT IFNULL(SUM(amount * fx_rate), 0)
         FROM expenses
         WHERE room_id = #{roomId}
     </select>
@@ -64,7 +64,7 @@
             e.amount AS amount,
             e.currency AS currency,
             e.fx_rate AS fxRate,
-            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
+            e.amount * e.fx_rate AS amountInBaseCurrency,
             m.name as payerName,
             CASE
                 WHEN e.payer_id = #{memberId}
@@ -89,7 +89,7 @@
             e.amount,
             e.currency,
             e.fx_rate AS fxRate,
-            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
+            e.amount * e.fx_rate AS amountInBaseCurrency,
             r.base_currency AS roomBaseCurrency,
             e.spent_at AS spentAt,
             e.payer_id AS payerId,
@@ -109,7 +109,7 @@
         SELECT
             es.member_id AS memberId,
             m.name,
-            ROUND(es.amount, 0) AS shareAmount,
+            es.amount AS shareAmount,
             CASE WHEN es.member_id = #{memberId} THEN TRUE ELSE FALSE END AS isSelf
         FROM expense_shares es
         JOIN members m ON es.member_id = m.member_id
@@ -129,7 +129,7 @@
             e.account_number AS accountNumber,
             e.currency,
             e.fx_rate AS fxRate,
-            ROUND(e.amount * IFNULL(e.fx_rate, 1.0), 0) AS amountInBaseCurrency,
+            e.amount * e.fx_rate AS amountInBaseCurrency,
             r.base_currency AS roomBaseCurrency,
             e.spent_at AS spentAt,
             e.payer_id AS payerId
@@ -156,7 +156,7 @@
         FROM members m
         -- [A] 멤버별 대신 내준 금액 (Paid)
         LEFT JOIN (
-            SELECT payer_id, SUM(amount * IFNULL(fx_rate, 1.0)) AS total_paid
+            SELECT payer_id, SUM(amount * fx_rate) AS total_paid
             FROM expenses
             WHERE room_id = #{roomId}
             GROUP BY payer_id
