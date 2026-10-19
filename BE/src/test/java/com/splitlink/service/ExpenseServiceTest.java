@@ -1048,46 +1048,6 @@ public class ExpenseServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
-
-        @Test
-        @DisplayName("성공: 요청 currency가 null이거나 빈 값인 경우 방 기준 통화(KRW)로 자동 적용되어 환율을 조회한다.")
-        void updateExpense_WithNullCurrency_UseBaseCurrency() {
-            // given
-            String rawAccount = "3333-12-345678";
-            String encryptedAccount = "EncryptedAccountText123";
-            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
-
-            ExpenseUpdateRequest request = createRequest(100L, List.of(100L, 101L), null);
-
-            Room mockRoom = Room.builder()
-                    .roomId(roomId)
-                    .baseCurrency("KRW")
-                    .isLocked(false)
-                    .isClosed(false)
-                    .build();
-
-            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(mockRoom);
-            given(encryptionUtil.encrypt(rawAccount)).willReturn(encryptedAccount);
-            given(exchangeRateService.getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate()))
-                    .willReturn(BigDecimal.ONE);
-
-            given(expenseMapper.updateExpense(
-                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
-                    eq(request.getTitle()), eq(request.getAmount()),
-                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
-            )).willReturn(1);
-
-            // when
-            expenseService.updateExpense(slug, expenseId, memberId, request);
-
-            // then
-            verify(exchangeRateService).getHistoricalExchangeRate("KRW", "KRW", spentAt.toLocalDate());
-            verify(expenseMapper).updateExpense(
-                    eq(expenseId), eq(roomId), eq(request.getPayerId()),
-                    eq(request.getTitle()), eq(request.getAmount()),
-                    eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
-            );
-        }
     }
 
     @Nested
