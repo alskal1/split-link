@@ -32,7 +32,7 @@ CREATE TABLE expenses (
                           bank_name VARCHAR(50) NOT NULL COMMENT '은행명',
                           account_number VARCHAR(255) NOT NULL COMMENT '계좌번호(암호화)',
                           currency VARCHAR(3) NOT NULL COMMENT '결제 화폐 단위',
-                          fx_rate DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT '기준 통화로 환산하기 위한 환율',
+                          fx_rate DECIMAL(18,8) NOT NULL DEFAULT 1.00000000 COMMENT '기준 통화로 환산하기 위한 환율',
                           spent_at TIMESTAMP NOT NULL COMMENT '지출 일시',
                           CONSTRAINT fk_expenses_room FOREIGN KEY (room_id)
                               REFERENCES rooms(room_id) ON DELETE CASCADE,
