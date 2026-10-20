@@ -21,10 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 지출 관련 비즈니스 로직을 처리하는 서비스
@@ -192,11 +189,10 @@ public class ExpenseService {
         // 상단 헤더 데이터 조회 (방 제목, 사용자 이름, baseCurrency, isLocked)
         RoomMapper.ExpenseListHeaderData headerData = roomMapper.getExpenseListHeaderData(roomId, memberId);
 
+        String roomBaseCurrency = headerData.getBaseCurrency().trim().toUpperCase();
+
         // 방 전체 총 지출 금액 조회 (null 방지 처리)
-        BigDecimal totalExpenseAmount = expenseMapper.findTotalExpenseAmountByRoomId(roomId);
-        if (totalExpenseAmount == null) {
-            totalExpenseAmount = BigDecimal.ZERO;
-        }
+        BigDecimal totalExpenseAmount = calculateTotalExpenseAmount(roomId, roomBaseCurrency);
 
         // 내 정산 상태 및 정산 금액 연산 (isLocked 여부에 따른 분기)
         ExpenseListResponse.SettlementStatus settlementStatus;
@@ -279,7 +275,7 @@ public class ExpenseService {
                 .amount(detail.getAmount())
                 .currency(detail.getCurrency())
                 .fxRate(detail.getFxRate())
-                .amountInBaseCurrency(detail.getAmountInBaseCurrency())
+                .amountInBaseCurrency(detail.getAmountInBaseCurrency()) // TODO: 반올림 처리 필요
                 .roomBaseCurrency(detail.getRoomBaseCurrency())
                 .spentAt(detail.getSpentAt())
                 .payerId(detail.getPayerId())
@@ -339,7 +335,7 @@ public class ExpenseService {
                 .amount(form.getAmount())
                 .currency(form.getCurrency())
                 .fxRate(form.getFxRate())
-                .amountInBaseCurrency(form.getAmountInBaseCurrency())
+                .amountInBaseCurrency(form.getAmountInBaseCurrency()) // TODO: 반올림 처리 필요
                 .roomBaseCurrency(form.getRoomBaseCurrency())
                 .bankName(form.getBankName())
                 .accountNumber(decryptedAccount)
@@ -460,6 +456,23 @@ public class ExpenseService {
         if (deletedRows == 0) {
             throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
+    }
+
+    /**
+     * 지출별로 기준 통화 환산 및 반올림 후 총합 계산
+     */
+    private BigDecimal calculateTotalExpenseAmount(Long roomId, String baseCurrency) {
+        List<ExpenseMapper.ExpenseConversionData> expenses = expenseMapper.findExpenseAmountsByRoomId(roomId);
+
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (ExpenseMapper.ExpenseConversionData expense : expenses) {
+            BigDecimal convertedAmount = convertToBaseCurrency(expense.getAmount(), expense.getFxRate(), baseCurrency);
+
+            total = total.add(convertedAmount);
+        }
+
+        return total;
     }
 
     /**

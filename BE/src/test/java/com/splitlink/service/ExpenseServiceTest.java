@@ -418,7 +418,17 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
             given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
-            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("45000"));
+            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
+                    .willReturn(List.of(
+                            new ExpenseMapper.ExpenseConversionData(
+                                    new BigDecimal("30000"),
+                                    new BigDecimal("1.0")
+                            ),
+                            new ExpenseMapper.ExpenseConversionData(
+                                    new BigDecimal("15000"),
+                                    new BigDecimal("1.0")
+                            )
+                    ));
             given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(item1, item2));
 
             // when
@@ -438,7 +448,7 @@ public class ExpenseServiceTest {
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, currentMemberId);
             verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
-            verify(expenseMapper).findTotalExpenseAmountByRoomId(roomId);
+            verify(expenseMapper).findExpenseAmountsByRoomId(roomId);
             verify(expenseMapper).findExpenseItems(roomId, currentMemberId);
         }
 
@@ -460,7 +470,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
+                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(new BigDecimal("5000"), BigDecimal.ZERO);
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -493,7 +504,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
+                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, new BigDecimal("5000"));
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -526,7 +538,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("30000"));
+            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
+                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, BigDecimal.ZERO);
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -570,7 +583,8 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
             given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
-            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId)).willReturn(new BigDecimal("135000"));
+            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
+                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("100.00"), new BigDecimal("1350.00"))));
             given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(foreignItem));
 
             // when
@@ -579,6 +593,7 @@ public class ExpenseServiceTest {
             // then
             assertThat(response).isNotNull();
             assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
+            assertThat(response.getTotalExpenseAmount()).isEqualByComparingTo(new BigDecimal("135000"));
             assertThat(response.getExpenses()).hasSize(1);
             assertThat(response.getExpenses().get(0).getCurrency()).isEqualTo("USD");
             assertThat(response.getExpenses().get(0).getFxRate()).isEqualByComparingTo(new BigDecimal("1350.00"));
@@ -718,7 +733,6 @@ public class ExpenseServiceTest {
 
             List<Long> mockTargetMemberIds = List.of(1L, 2L);
 
-            // ★ MemberMapper 반환 타입(ExpenseFormInitResponse.MemberInfo)에 맞게 변경
             List<ExpenseFormInitResponse.MemberInfo> mockRoomMembers = List.of(
                     ExpenseFormInitResponse.MemberInfo.builder()
                             .memberId(1L)
@@ -757,7 +771,6 @@ public class ExpenseServiceTest {
             assertThat(result.getRoomBaseCurrency()).isEqualTo("KRW");
             assertThat(result.getTargetMemberIds()).containsExactly(1L, 2L);
 
-            // 최종 응답 DTO(ExpenseUpdateFormResponse.MemberInfo) 검증
             assertThat(result.getRoomMembers()).hasSize(2);
             assertThat(result.getRoomMembers().get(0).getName()).isEqualTo("스펀지밥");
 
@@ -864,7 +877,7 @@ public class ExpenseServiceTest {
             return ExpenseUpdateRequest.builder()
                     .payerId(payerId)
                     .title("수정된 점심 식사")
-                    .amount(new BigDecimal("30000"))
+                    .amount(new BigDecimal("30"))
                     .currency(currency)
                     .bankName("카카오뱅크")
                     .accountNumber("3333-12-345678")
@@ -970,7 +983,9 @@ public class ExpenseServiceTest {
 
             List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
             assertThat(shares).hasSize(2);
-            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("20250000.00"));
+            // 30 USD * 1350 = 40,500 KRW -> 2명 분할 시 각 20,250 KRW
+            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("20250"));
+            assertThat(shares.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("20250"));
         }
 
         @Test

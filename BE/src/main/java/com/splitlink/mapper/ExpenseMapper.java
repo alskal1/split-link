@@ -30,9 +30,6 @@ public interface ExpenseMapper {
     /** 개별 금액이 포함된 부담금 Bulk Insert */
     void insertExpenseShares(@Param("shares") List<ExpenseShareParam> shares);
 
-    /** 방 전체 총 지출 금액 합산 */
-    BigDecimal findTotalExpenseAmountByRoomId(@Param("roomId") Long roomId);
-
     /** 하단 지출 목록 조회 */
     List<ExpenseListResponse.ExpenseItemResponse> findExpenseItems(@Param("roomId") Long roomId,
                                                                    @Param("memberId") Long memberId);
@@ -59,6 +56,14 @@ public interface ExpenseMapper {
 
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);
+
+    /**
+     * 방의 지출 원금과 적용 환율 조회
+     * 서비스에서 지출별 환산 및 반올림을 수행하기 위한 데이터
+     */
+    List<ExpenseConversionData> findExpenseAmountsByRoomId(
+            @Param("roomId") Long roomId
+    );
 
     /** 지출 메인 정보 수정 */
     int updateExpense(@Param("expenseId") Long expenseId,
@@ -90,5 +95,16 @@ public interface ExpenseMapper {
         private Long expenseId;
         private Long memberId;
         private BigDecimal amount;
+    }
+
+    /**
+     * 방 전체 지출 합계 계산용 전달 DTO
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ExpenseConversionData {
+        private BigDecimal amount;
+        private BigDecimal fxRate;
     }
 }

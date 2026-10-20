@@ -36,6 +36,7 @@ public class ExchangeRateService {
         // 1차 시도 (요청 날짜 또는 latest)
         BigDecimal rate = fetchRateFromApi(datePath, paymentCurrency, roomBaseCurrency);
         if (rate != null) {
+            // TODO: 환율조회 성공이라고 뜨는데 10/20 조회했지만 latest주소이며 10/19 데이터임. 하지만 로그 출력은 20일이라고 뜸
             log.info("[환율 조회 성공] 요청일: {}, 사용 Endpoint: {}, 환율: {}", spentDate, datePath, rate);
             return rate;
         }
@@ -55,6 +56,7 @@ public class ExchangeRateService {
      * Frankfurter API 호출 및 안전한 JSON 파싱
      */
     private BigDecimal fetchRateFromApi(String datePath, String from, String to) {
+        // TODO: latest 검색했으나 검색날짜와 입력날짜가 다른 경우 처리 필요
         String url = String.format("https://api.frankfurter.dev/v1/%s?from=%s&to=%s",
                 datePath,
                 from.trim().toUpperCase(),

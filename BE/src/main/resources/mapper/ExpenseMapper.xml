@@ -49,13 +49,6 @@
         </foreach>
     </insert>
 
-    <!-- 방 전체 총 지출 합계 -->
-    <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
-        SELECT IFNULL(SUM(amount * fx_rate), 0)
-        FROM expenses
-        WHERE room_id = #{roomId}
-    </select>
-
     <!-- 지출 내역 목록 조회 -->
     <select id="findExpenseItems" resultType="com.splitlink.dto.response.ExpenseListResponse$ExpenseItemResponse">
         SELECT
@@ -176,6 +169,15 @@
     <!-- 방 기준 지출 건수 조회 -->
     <select id="countExpensesByRoomId" resultType="int">
         SELECT COUNT(*)
+        FROM expenses
+        WHERE room_id = #{roomId}
+    </select>
+
+    <!-- 방의 지출 원금과 적용 환율 조회 -->
+    <select id="findExpenseAmountsByRoomId" resultType="com.splitlink.mapper.ExpenseMapper$ExpenseConversionData">
+        SELECT
+            amount,
+            fx_rate AS fxRate
         FROM expenses
         WHERE room_id = #{roomId}
     </select>
