@@ -912,6 +912,48 @@ public class ExpenseServiceTest {
             verify(roomMapper).findRoomStatusBySlug(slug);
             verify(expenseMapper).findExpenseUpdateFormById(expenseId, roomId);
         }
+
+        @Test
+        @DisplayName("성공: 외화 지출 수정 폼 조회 시 방 기준 통화의 소수점 자릿수에 맞춰 환산 금액을 반올림한다.")
+        void getExpenseUpdateForm_RoundsConvertedAmountToBaseCurrencyScale() {
+            // given
+            String encryptedAccount = "EncryptedAccountText123";
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+
+            RoomMapper.RoomStatus mockStatus = RoomMapper.RoomStatus.builder()
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+            given(roomMapper.findRoomStatusBySlug(slug)).willReturn(mockStatus);
+
+            ExpenseUpdateFormResponse mockForm = ExpenseUpdateFormResponse.builder()
+                    .expenseId(expenseId)
+                    .title("미국 스테이크")
+                    .amount(new BigDecimal("10.25"))
+                    .currency("USD")
+                    .fxRate(new BigDecimal("1350.00"))
+                    .roomBaseCurrency("KRW")
+                    .bankName("카카오뱅크")
+                    .accountNumber(encryptedAccount)
+                    .spentAt(LocalDateTime.of(2026, 9, 17, 12, 0))
+                    .payerId(1L)
+                    .build();
+
+            given(expenseMapper.findExpenseUpdateFormById(expenseId, roomId)).willReturn(Optional.of(mockForm));
+            given(encryptionUtil.decrypt(encryptedAccount)).willReturn("3333-12-345678");
+            given(expenseMapper.findTargetMemberIdsByExpenseId(expenseId)).willReturn(List.of(1L));
+            given(memberMapper.findRoomMembersBySlug(slug, memberId)).willReturn(List.of());
+
+            // when
+            ExpenseUpdateFormResponse result = expenseService.getExpenseUpdateForm(slug, expenseId, memberId);
+
+            // then
+            // 10.25 USD × 1350.00 KRW = 13837.50 KRW -> HALF_UP 적용 시 13838 KRW
+            assertThat(result.getAmountInBaseCurrency()).isEqualByComparingTo(new BigDecimal("13838"));
+            assertThat(result.getAmount()).isEqualByComparingTo(new BigDecimal("10.25"));
+            assertThat(result.getFxRate()).isEqualByComparingTo(new BigDecimal("1350.00"));
+        }
     }
 
     @Nested

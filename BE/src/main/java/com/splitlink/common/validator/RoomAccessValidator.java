@@ -27,7 +27,7 @@ public class RoomAccessValidator {
     }
 
     /**
-     * slug와 memberId로 방 권한을 검증하고, Room 엔티티(roomId, isLocked, isClosed 포함)를 반환
+     * slug와 memberId로 방 권한을 검증하고, Room 엔티티(roomId, baseCurrency, isLocked, isClosed 포함)를 반환
      */
     public Room validateAndGetRoom(String slug, Long memberId) {
         Room room = roomMapper.findRoomBySlugAndMemberId(slug, memberId);

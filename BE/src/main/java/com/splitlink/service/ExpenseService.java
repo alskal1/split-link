@@ -290,9 +290,18 @@ public class ExpenseService {
                 .build();
     }
 
-    // TODO: 주석 추가
+    /**
+     * 지출 수정 폼 조회 (기존 정보 + 방 소속 멤버 목록)
+     *
+     * @param slug      방 식별자 (UUID/Slug)
+     * @param expenseId 지출 PK
+     * @param memberId  현재 접속한 회원 PK
+     * @return 지출 수정 폼 응답 DTO
+     */
     @Transactional(readOnly = true)
     public ExpenseUpdateFormResponse getExpenseUpdateForm(String slug, Long expenseId, Long memberId) {
+
+        // TODO: validateAndGetRoom 으로 바꾸는게 좋을듯 (DB 접근 횟수 감소)
 
         // 방 접근 권한 검증 및 roomId 가져오기
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
@@ -309,9 +318,12 @@ public class ExpenseService {
             throw new IllegalArgumentException("이미 지출 입력이 잠긴 방의 지출은 수정할 수 없습니다.");
         }
 
-        // 지출 기본 정보 조회 (제목, 금액, 결제일시, 결제자ID)
+        // 지출 기본 정보 조회 (제목, 금액, 결제일시, 결제자ID ...)
         ExpenseUpdateFormResponse form = expenseMapper.findExpenseUpdateFormById(expenseId, roomId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
+
+        // 방 기준 통화 환산 금액 및 반올림 처리
+        BigDecimal amountInBaseCurrency = convertToBaseCurrency(form.getAmount(), form.getFxRate(), form.getRoomBaseCurrency());
 
         // expenses 테이블의 암호화된 계좌번호 복호화
         String decryptedAccount = encryptionUtil.decrypt(form.getAccountNumber());
@@ -338,7 +350,7 @@ public class ExpenseService {
                 .amount(form.getAmount())
                 .currency(form.getCurrency())
                 .fxRate(form.getFxRate())
-                .amountInBaseCurrency(form.getAmountInBaseCurrency()) // TODO: 반올림 처리 필요
+                .amountInBaseCurrency(amountInBaseCurrency)
                 .roomBaseCurrency(form.getRoomBaseCurrency())
                 .bankName(form.getBankName())
                 .accountNumber(decryptedAccount)

@@ -121,7 +121,6 @@
             e.account_number AS accountNumber,
             e.currency,
             e.fx_rate AS fxRate,
-            e.amount * e.fx_rate AS amountInBaseCurrency,
             r.base_currency AS roomBaseCurrency,
             e.spent_at AS spentAt,
             e.payer_id AS payerId
