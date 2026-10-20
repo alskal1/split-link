@@ -261,6 +261,9 @@ public class ExpenseService {
         ExpenseDetailResponse detail = expenseMapper.findExpenseDetailById(expenseId, roomId, memberId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 지출 내역이 존재하지 않습니다."));
 
+        // 방 기준 통화 환산 금액 및 반올림 처리
+        BigDecimal amountInBaseCurrency = convertToBaseCurrency(detail.getAmount(), detail.getFxRate(), detail.getRoomBaseCurrency());
+
         // 지출 부담 참여자 목록 및 1/N 보정된 개인별 금액 조회
         List<ExpenseDetailResponse.TargetMemberDetail> targetMembers =
                 expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId);
@@ -275,7 +278,7 @@ public class ExpenseService {
                 .amount(detail.getAmount())
                 .currency(detail.getCurrency())
                 .fxRate(detail.getFxRate())
-                .amountInBaseCurrency(detail.getAmountInBaseCurrency()) // TODO: 반올림 처리 필요
+                .amountInBaseCurrency(amountInBaseCurrency)
                 .roomBaseCurrency(detail.getRoomBaseCurrency())
                 .spentAt(detail.getSpentAt())
                 .payerId(detail.getPayerId())

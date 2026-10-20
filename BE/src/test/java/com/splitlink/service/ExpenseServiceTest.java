@@ -691,6 +691,56 @@ public class ExpenseServiceTest {
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
             verify(expenseMapper).findExpenseDetailById(expenseId, roomId, memberId);
         }
+
+        @Test
+        @DisplayName("성공: 외화 지출 상세 조회 시 방 기준 통화의 소수점 자릿수에 맞춰 환산 금액을 반올림한다.")
+        void getExpenseDetail_RoundsConvertedAmountToBaseCurrencyScale() {
+            // given
+            String encryptedAccount = "EncryptedAccountText123";
+
+            given(roomAccessValidator.validateAndGetRoomId(slug, memberId))
+                    .willReturn(roomId);
+
+            ExpenseDetailResponse mockDetail = ExpenseDetailResponse.builder()
+                    .expenseId(expenseId)
+                    .title("미국 여행 식사")
+                    .amount(new BigDecimal("10.25"))
+                    .currency("USD")
+                    .fxRate(new BigDecimal("1350.00"))
+                    .amountInBaseCurrency(new BigDecimal("13837.50"))
+                    .roomBaseCurrency("KRW")
+                    .spentAt(LocalDateTime.of(2026, 9, 9, 18, 30))
+                    .payerId(memberId)
+                    .payerName("스펀지밥")
+                    .bankName("카카오뱅크")
+                    .accountNumber(encryptedAccount)
+                    .isMyPayment(true)
+                    .build();
+
+            given(expenseMapper.findExpenseDetailById(expenseId, roomId, memberId))
+                    .willReturn(Optional.of(mockDetail));
+
+            given(expenseMapper.findExpenseSharesByExpenseId(expenseId, roomId, memberId))
+                    .willReturn(List.of());
+
+            given(encryptionUtil.decrypt(encryptedAccount))
+                    .willReturn("3333-12-3456789");
+
+            // when
+            ExpenseDetailResponse result =
+                    expenseService.getExpenseDetail(slug, expenseId, memberId);
+
+            // then
+            // 10.25 USD × 1350 KRW = 13837.50 KRW
+            // KRW는 소수점 이하를 사용하지 않으므로 HALF_UP 반올림 결과는 13838
+            assertThat(result.getAmountInBaseCurrency())
+                    .isEqualByComparingTo(new BigDecimal("13838"));
+
+            assertThat(result.getAmount()).isEqualByComparingTo(new BigDecimal("10.25"));
+            assertThat(result.getCurrency()).isEqualTo("USD");
+            assertThat(result.getFxRate()).isEqualByComparingTo(new BigDecimal("1350.00"));
+            assertThat(result.getRoomBaseCurrency()).isEqualTo("KRW");
+        }
     }
 
     @Nested
