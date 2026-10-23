@@ -371,6 +371,135 @@ public class ExpenseServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("이미 정산이 완료된 방에는 지출을 추가할 수 없습니다.");
         }
+
+        @Test
+        @DisplayName("성공: 소수 4자리 환율(1382.4567) 적용 시 반올림 환산액과 3명 분할 부담금 합계가 정확히 일치한다.")
+        void createExpenses_WithDecimalRate_PreservesTotalSum() {
+            // given
+            String slug = "test-slug";
+            Long currentMemberId = 1L;
+            Long roomId = 10L;
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
+
+            // 100 USD 결제, 소수 4자리 환율 1382.4567
+            ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("뉴욕 저녁 식사")
+                    .amount(new BigDecimal("100"))
+                    .targetMemberIds(List.of(1L, 2L, 3L))
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(1L)
+                    .spentAt(spentAt)
+                    .currency("USD")
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
+                    .items(List.of(item))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("KRW")
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
+            given(encryptionUtil.encrypt(anyString())).willReturn("EncryptedAccountText");
+            given(exchangeRateService.getHistoricalExchangeRate("USD", "KRW", spentAt.toLocalDate()))
+                    .willReturn(new BigDecimal("1382.4567"));
+
+            // when
+            expenseService.createExpenses(slug, currentMemberId, request);
+
+            // then
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<ExpenseMapper.ExpenseShareParam>> captor = ArgumentCaptor.forClass(List.class);
+            verify(expenseMapper).insertExpenseShares(captor.capture());
+
+            List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
+            assertThat(shares).hasSize(3);
+
+            // 100 USD * 1382.4567 = 138245.67 KRW -> HALF_UP 반올림 적용 시 138,246 KRW
+            // 138,246 / 3 = 46,082 KRW (나머지 0원)
+            BigDecimal totalSum = shares.stream()
+                    .map(ExpenseMapper.ExpenseShareParam::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            assertThat(totalSum).isEqualByComparingTo(new BigDecimal("138246"));
+            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("46082"));
+            assertThat(shares.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("46082"));
+            assertThat(shares.get(2).getAmount()).isEqualByComparingTo(new BigDecimal("46082"));
+        }
+
+        @Test
+        @DisplayName("성공: 기준 통화가 EUR인 방에서 USD 결제 시 소수 2자리 오차가 첫 번째 참여자에게 보정된다.")
+        void createExpenses_WithEurBaseCurrency_RoundsScaleAndPreservesSum() {
+            // given
+            String slug = "test-slug";
+            Long currentMemberId = 1L;
+            Long roomId = 10L;
+            LocalDateTime spentAt = LocalDateTime.of(2026, 9, 17, 12, 0);
+
+            // 100.55 USD 결제, USD -> EUR 환율 0.9200
+            ExpenseBatchCreateRequest.ExpenseItemRequest item = ExpenseBatchCreateRequest.ExpenseItemRequest.builder()
+                    .title("유럽 박물관 입장료")
+                    .amount(new BigDecimal("100.55"))
+                    .targetMemberIds(List.of(1L, 2L, 3L))
+                    .build();
+
+            ExpenseBatchCreateRequest.ExpenseGroupRequest group = ExpenseBatchCreateRequest.ExpenseGroupRequest.builder()
+                    .payerId(1L)
+                    .spentAt(spentAt)
+                    .currency("USD")
+                    .bankName("카카오뱅크")
+                    .accountNumber("3333-12-345678")
+                    .items(List.of(item))
+                    .build();
+
+            ExpenseBatchCreateRequest request = ExpenseBatchCreateRequest.builder()
+                    .expenseGroups(List.of(group))
+                    .build();
+
+            // 방 기준 통화: EUR (소수점 2자리)
+            Room mockRoom = Room.builder()
+                    .roomId(roomId)
+                    .baseCurrency("EUR")
+                    .isLocked(false)
+                    .isClosed(false)
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, currentMemberId)).willReturn(mockRoom);
+            given(encryptionUtil.encrypt(anyString())).willReturn("EncryptedAccountText");
+            given(exchangeRateService.getHistoricalExchangeRate("USD", "EUR", spentAt.toLocalDate()))
+                    .willReturn(new BigDecimal("0.9200"));
+
+            // when
+            expenseService.createExpenses(slug, currentMemberId, request);
+
+            // then
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<ExpenseMapper.ExpenseShareParam>> captor = ArgumentCaptor.forClass(List.class);
+            verify(expenseMapper).insertExpenseShares(captor.capture());
+
+            List<ExpenseMapper.ExpenseShareParam> shares = captor.getValue();
+            assertThat(shares).hasSize(3);
+
+            // 100.55 USD * 0.9200 = 92.5060 EUR -> HALF_UP(scale=2) 반올림 시 92.51 EUR
+            // 92.51 / 3 = 30.83 EUR (30.83 * 3 = 92.49 EUR, 차액 0.02 EUR가 첫 번째 사람에게 모임)
+            BigDecimal totalSum = shares.stream()
+                    .map(ExpenseMapper.ExpenseShareParam::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            assertThat(totalSum).isEqualByComparingTo(new BigDecimal("92.51"));
+            assertThat(shares.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("30.85"));
+            assertThat(shares.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("30.83"));
+            assertThat(shares.get(2).getAmount()).isEqualByComparingTo(new BigDecimal("30.83"));
+        }
     }
 
     @Nested
