@@ -36,21 +36,7 @@ class ExchangeRateServiceTest {
     private ExchangeRateService exchangeRateService;
 
     @Mock
-    private RestClient restClient;
-
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
-
-    @Mock
-    @SuppressWarnings("rawtypes")
-    private RestClient.RequestHeadersUriSpec requestHeadersUriSpec;
-
-    @Mock
-    @SuppressWarnings("rawtypes")
-    private RestClient.RequestHeadersSpec requestHeadersSpec;
-
-    @Mock
-    private RestClient.ResponseSpec responseSpec;
+    private ExchangeRateApiCacheClient exchangeRateApiCacheClient;
 
     @Nested
     @DisplayName("과거 환율 조회 (getHistoricalExchangeRate)")
@@ -69,77 +55,57 @@ class ExchangeRateServiceTest {
 
             // then
             assertThat(rate).isEqualByComparingTo(BigDecimal.ONE);
-            verifyNoInteractions(restClient);
+            verifyNoInteractions(exchangeRateApiCacheClient);
         }
 
         @Test
-        @DisplayName("성공: 과거 외화(USD -> KRW) 조회 시 Frankfurter API를 호출하여 환율을 정상 반환한다.")
+        @DisplayName("성공: 과거 외화(USD -> KRW) 조회 시 1차 시도(CacheClient)를 통해 환율을 정상 반환한다.")
         void getHistoricalExchangeRate_ForeignCurrency_Success() throws JsonProcessingException {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
             LocalDate date = LocalDate.of(2026, 10, 12);
+            BigDecimal mockRate = new BigDecimal("1333.09");
 
-            FrankfurterApiResponse mockResponseDto = FrankfurterApiResponse.builder()
-                    .amount(BigDecimal.ONE)
-                    .base("USD")
-                    .date("2026-10-12")
-                    .rates(Map.of("KRW", new BigDecimal("1333.09")))
-                    .build();
-
-            String jsonBody = objectMapper.writeValueAsString(mockResponseDto);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            ResponseEntity<String> responseEntity = new ResponseEntity<>(jsonBody, headers, HttpStatus.OK);
-
-            given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
-            given(responseSpec.toEntity(String.class)).willReturn(responseEntity);
+            given(exchangeRateApiCacheClient.fetchHistoricalRate(
+                    eq(date.toString()),
+                    eq(date.toString()),
+                    eq(fromCurrency),
+                    eq(toCurrency)
+            )).willReturn(mockRate);
 
             // when
             BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date);
 
             // then
             assertThat(rate).isEqualByComparingTo("1333.09");
-            verify(restClient, times(1)).get();
+            verify(exchangeRateApiCacheClient, times(1))
+                    .fetchHistoricalRate(date.toString(), date.toString(), fromCurrency, toCurrency);
         }
 
         @Test
-        @DisplayName("성공: 유럽 현지 기준 오늘 날짜 요청 시 latest Endpoint로 환율을 정상 조회한다.")
+        @DisplayName("성공: 유럽 현지 기준 오늘 날짜 요청 시 datePath가 latest로 전달되어 환율을 조회한다.")
         void getHistoricalExchangeRate_EuropeToday_UsesLatestEndpoint() throws JsonProcessingException {
             // given
             String fromCurrency = "USD";
             String toCurrency = "KRW";
             LocalDate europeToday = LocalDate.now(ZoneId.of("Europe/Berlin"));
+            BigDecimal mockRate = new BigDecimal("1333.09");
 
-            FrankfurterApiResponse mockResponseDto = FrankfurterApiResponse.builder()
-                    .rates(Map.of("KRW", new BigDecimal("1333.09")))
-                    .build();
-
-            String jsonBody = objectMapper.writeValueAsString(mockResponseDto);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            ResponseEntity<String> responseEntity = new ResponseEntity<>(jsonBody, headers, HttpStatus.OK);
-
-            given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(contains("latest"))).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
-            given(responseSpec.toEntity(String.class)).willReturn(responseEntity);
+            given(exchangeRateApiCacheClient.fetchHistoricalRate(
+                    eq("latest"),
+                    eq(europeToday.toString()),
+                    eq(fromCurrency),
+                    eq(toCurrency)
+            )).willReturn(mockRate);
 
             // when
             BigDecimal rate = exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, europeToday);
 
             // then
             assertThat(rate).isEqualByComparingTo("1333.09");
+            verify(exchangeRateApiCacheClient, times(1))
+                    .fetchHistoricalRate("latest", europeToday.toString(), fromCurrency, toCurrency);
         }
 
         @Test
@@ -150,20 +116,18 @@ class ExchangeRateServiceTest {
             String toCurrency = "KRW";
             LocalDate date = LocalDate.of(2026, 10, 12);
 
-            ResponseEntity<String> errorEntity = new ResponseEntity<>("<html>404 Not Found</html>", HttpStatus.NOT_FOUND);
+            // 1차 캐시/특정일자 API 시도 실패 (null)
+            given(exchangeRateApiCacheClient.fetchHistoricalRate(anyString(), anyString(), anyString(), anyString()))
+                    .willReturn(null);
 
-            given(restClient.get()).willReturn(requestHeadersUriSpec);
-            given(requestHeadersUriSpec.uri(anyString())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.accept(any())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.header(anyString(), anyString())).willReturn(requestHeadersSpec);
-            given(requestHeadersSpec.retrieve()).willReturn(responseSpec);
-            given(responseSpec.onStatus(any(), any())).willReturn(responseSpec);
-            given(responseSpec.toEntity(String.class)).willReturn(errorEntity);
+            // 2차 /latest 우회 API 시도 실패 (null)
+            given(exchangeRateApiCacheClient.fetchRateFromApi(eq("latest"), anyString(), anyString()))
+                    .willReturn(null);
 
             // when & then
             assertThatThrownBy(() -> exchangeRateService.getHistoricalExchangeRate(fromCurrency, toCurrency, date))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("환율 정보를 가져올 수 없습니다.");
+                    .hasMessageContaining("해당 날짜(" + date + ")의 환율 정보를 가져올 수 없습니다.");
         }
     }
 }
