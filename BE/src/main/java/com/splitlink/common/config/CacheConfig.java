@@ -7,8 +7,11 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 @Configuration
@@ -17,7 +20,18 @@ public class CacheConfig {
 
     @Bean
     public RestClient restClient() {
-        return RestClient.create();
+
+        // HTTP 클라이언트 타임아웃 설정 (Connect Timeout: 3초, Read Timeout: 3초)
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(3))
+                        .build()
+        );
+        factory.setReadTimeout(Duration.ofSeconds(3));
+
+        return RestClient.builder()
+                .requestFactory(factory)
+                .build();
     }
 
     /**
