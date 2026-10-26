@@ -173,11 +173,9 @@
         WHERE room_id = #{roomId}
     </select>
 
-    <!-- 방의 지출 원금과 적용 환율 조회 -->
-    <select id="findExpenseAmountsByRoomId" resultType="com.splitlink.mapper.ExpenseMapper$ExpenseConversionData">
-        SELECT
-            amount,
-            fx_rate AS fxRate
+    <!-- 방 기준 총 지출 금액 합산 조회 -->
+    <select id="findTotalExpenseAmountByRoomId" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(amount_in_base), 0)
         FROM expenses
         WHERE room_id = #{roomId}
     </select>

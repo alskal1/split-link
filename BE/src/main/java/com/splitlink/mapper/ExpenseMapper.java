@@ -57,12 +57,8 @@ public interface ExpenseMapper {
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);
 
-    // TODO: 총액 쿼리 단순화 하기  SELECT IFNULL(SUM(amount_in_base), 0)
-    /**
-     * 방의 지출 원금과 적용 환율 조회
-     * 서비스에서 지출별 환산 및 반올림을 수행하기 위한 데이터
-     */
-    List<ExpenseConversionData> findExpenseAmountsByRoomId(
+    /** 방 기준 총 지출 금액 합산 조회 */
+    BigDecimal findTotalExpenseAmountByRoomId(
             @Param("roomId") Long roomId
     );
 
@@ -97,16 +93,5 @@ public interface ExpenseMapper {
         private Long expenseId;
         private Long memberId;
         private BigDecimal amount;
-    }
-
-    /**
-     * 방 전체 지출 합계 계산용 전달 DTO
-     */
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    class ExpenseConversionData {
-        private BigDecimal amount;
-        private BigDecimal fxRate;
     }
 }

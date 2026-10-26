@@ -190,10 +190,8 @@ public class ExpenseService {
         // 상단 헤더 데이터 조회 (방 제목, 사용자 이름, baseCurrency, isLocked)
         RoomMapper.ExpenseListHeaderData headerData = roomMapper.getExpenseListHeaderData(roomId, memberId);
 
-        String roomBaseCurrency = headerData.getBaseCurrency().trim().toUpperCase();
-
-        // 방 전체 총 지출 금액 조회 (null 방지 처리)
-        BigDecimal totalExpenseAmount = calculateTotalExpenseAmount(roomId, roomBaseCurrency);
+        // 방 전체 총 지출 금액 조회
+        BigDecimal totalExpenseAmount = expenseMapper.findTotalExpenseAmountByRoomId(roomId);
 
         // 내 정산 상태 및 정산 금액 연산 (isLocked 여부에 따른 분기)
         ExpenseListResponse.SettlementStatus settlementStatus;
@@ -473,23 +471,6 @@ public class ExpenseService {
         if (deletedRows == 0) {
             throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
-    }
-
-    /**
-     * 지출별로 기준 통화 환산 및 반올림 후 총합 계산
-     */
-    private BigDecimal calculateTotalExpenseAmount(Long roomId, String baseCurrency) {
-        List<ExpenseMapper.ExpenseConversionData> expenses = expenseMapper.findExpenseAmountsByRoomId(roomId);
-
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (ExpenseMapper.ExpenseConversionData expense : expenses) {
-            BigDecimal convertedAmount = convertToBaseCurrency(expense.getAmount(), expense.getFxRate(), baseCurrency);
-
-            total = total.add(convertedAmount);
-        }
-
-        return total;
     }
 
     /**
