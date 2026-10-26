@@ -149,6 +149,7 @@ public class ExpenseService {
                         .payerId(group.getPayerId())
                         .title(item.getTitle())
                         .amount(item.getAmount())        // 외화 원금
+                        .amountInBase(convertedTotalAmount) // 방 기준 통화 환산 금액
                         .bankName(group.getBankName())
                         .accountNumber(encryptedAccount)
                         .currency(paymentCurrency)       // 결제 통화
@@ -406,6 +407,9 @@ public class ExpenseService {
                 request.getSpentAt().toLocalDate()
         );
 
+        // 방 기준 통화 환산 금액(외화 금액 * fxRate)으로 1/N 부담금 재계산 및 Bulk Insert
+        BigDecimal convertedTotalAmount = convertToBaseCurrency(request.getAmount(), fxRate, roomBaseCurrency);
+
         // 메인 지출 데이터 수정
         int updatedRows = expenseMapper.updateExpense(
                 expenseId,
@@ -413,6 +417,7 @@ public class ExpenseService {
                 request.getPayerId(),
                 request.getTitle(),
                 request.getAmount(),
+                convertedTotalAmount,
                 request.getBankName(),
                 encryptedAccount,
                 paymentCurrency,
@@ -426,9 +431,6 @@ public class ExpenseService {
 
         // 기존 부담금(expense_shares) 삭제
         expenseMapper.deleteExpenseSharesByExpenseId(expenseId);
-
-        // 방 기준 통화 환산 금액(외화 금액 * fxRate)으로 1/N 부담금 재계산 및 Bulk Insert
-        BigDecimal convertedTotalAmount = convertToBaseCurrency(request.getAmount(), fxRate, roomBaseCurrency);
 
         List<ExpenseMapper.ExpenseShareParam> newShares = calculateShares(
                 expenseId,

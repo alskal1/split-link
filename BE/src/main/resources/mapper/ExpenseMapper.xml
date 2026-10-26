@@ -15,6 +15,7 @@
         payer_id,
         title,
         amount,
+        amount_in_base,
         bank_name,
         account_number,
         currency,
@@ -25,6 +26,7 @@
         #{payerId},
         #{title},
         #{amount},
+        #{amountInBase},
         #{bankName},
         #{accountNumber},
         #{currency},
@@ -57,7 +59,7 @@
             e.amount AS amount,
             e.currency AS currency,
             e.fx_rate AS fxRate,
-            e.amount * e.fx_rate AS amountInBaseCurrency,
+            e.amount_in_base AS amountInBaseCurrency,
             m.name as payerName,
             CASE
                 WHEN e.payer_id = #{memberId}
@@ -147,7 +149,7 @@
         FROM members m
         -- [A] 멤버별 대신 내준 금액 (Paid)
         LEFT JOIN (
-            SELECT payer_id, SUM(amount * fx_rate) AS total_paid
+            SELECT payer_id, SUM(amount_in_base) AS total_paid
             FROM expenses
             WHERE room_id = #{roomId}
             GROUP BY payer_id
@@ -187,6 +189,7 @@
             payer_id = #{payerId},
             title = #{title},
             amount = #{amount},
+            amount_in_base = #{amountInBase},
             bank_name = #{bankName},
             account_number = #{accountNumber},
             currency = #{currency},

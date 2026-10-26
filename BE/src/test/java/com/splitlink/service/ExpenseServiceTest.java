@@ -1132,6 +1132,7 @@ public class ExpenseServiceTest {
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
+                    eq(new BigDecimal("30")),
                     eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             )).willReturn(1);
 
@@ -1149,6 +1150,7 @@ public class ExpenseServiceTest {
             verify(expenseMapper).updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
+                    eq(new BigDecimal("30")),
                     eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             );
             verify(expenseMapper).deleteExpenseSharesByExpenseId(expenseId);
@@ -1181,6 +1183,7 @@ public class ExpenseServiceTest {
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
+                    eq(new BigDecimal("40500")),
                     eq("카카오뱅크"), eq(encryptedAccount), eq("USD"), eq(usdRate), eq(spentAt)
             )).willReturn(1);
 
@@ -1195,6 +1198,7 @@ public class ExpenseServiceTest {
             verify(expenseMapper).updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
+                    eq(new BigDecimal("40500")),
                     eq("카카오뱅크"), eq(encryptedAccount), eq("USD"), eq(usdRate), eq(spentAt)
             );
 
@@ -1276,6 +1280,7 @@ public class ExpenseServiceTest {
             given(expenseMapper.updateExpense(
                     eq(expenseId), eq(roomId), eq(request.getPayerId()),
                     eq(request.getTitle()), eq(request.getAmount()),
+                    eq(new BigDecimal("30")),
                     eq("카카오뱅크"), eq(encryptedAccount), eq("KRW"), eq(BigDecimal.ONE), eq(spentAt)
             )).willReturn(0);
 
