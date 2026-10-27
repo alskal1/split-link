@@ -547,17 +547,8 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
             given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
-            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
-                    .willReturn(List.of(
-                            new ExpenseMapper.ExpenseConversionData(
-                                    new BigDecimal("30000"),
-                                    new BigDecimal("1.0")
-                            ),
-                            new ExpenseMapper.ExpenseConversionData(
-                                    new BigDecimal("15000"),
-                                    new BigDecimal("1.0")
-                            )
-                    ));
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId))
+                    .willReturn(new BigDecimal("45000"));
             given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(item1, item2));
 
             // when
@@ -577,7 +568,7 @@ public class ExpenseServiceTest {
 
             verify(roomAccessValidator).validateAndGetRoomId(slug, currentMemberId);
             verify(roomMapper).getExpenseListHeaderData(roomId, currentMemberId);
-            verify(expenseMapper).findExpenseAmountsByRoomId(roomId);
+            verify(expenseMapper).findTotalExpenseAmountByRoomId(roomId);
             verify(expenseMapper).findExpenseItems(roomId, currentMemberId);
         }
 
@@ -599,8 +590,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
-                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId))
+                    .willReturn(new BigDecimal("30000"));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(new BigDecimal("5000"), BigDecimal.ZERO);
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -633,8 +624,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
-                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId))
+                    .willReturn(new BigDecimal("30000"));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, new BigDecimal("5000"));
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -667,8 +658,8 @@ public class ExpenseServiceTest {
                     .build();
 
             given(roomMapper.getExpenseListHeaderData(roomId, memberId)).willReturn(headerData);
-            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
-                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("30000"), BigDecimal.ONE)));
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId))
+                    .willReturn(new BigDecimal("30000"));
 
             SettlementMapper.SettlementSummary summary = new SettlementMapper.SettlementSummary(BigDecimal.ZERO, BigDecimal.ZERO);
             given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(summary);
@@ -712,8 +703,8 @@ public class ExpenseServiceTest {
 
             given(roomAccessValidator.validateAndGetRoomId(slug, currentMemberId)).willReturn(roomId);
             given(roomMapper.getExpenseListHeaderData(roomId, currentMemberId)).willReturn(headerData);
-            given(expenseMapper.findExpenseAmountsByRoomId(roomId))
-                    .willReturn(List.of(new ExpenseMapper.ExpenseConversionData(new BigDecimal("100.00"), new BigDecimal("1350.00"))));
+            given(expenseMapper.findTotalExpenseAmountByRoomId(roomId))
+                    .willReturn(new BigDecimal("135000"));
             given(expenseMapper.findExpenseItems(roomId, currentMemberId)).willReturn(List.of(foreignItem));
 
             // when
