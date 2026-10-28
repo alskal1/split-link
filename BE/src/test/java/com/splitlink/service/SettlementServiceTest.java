@@ -191,13 +191,19 @@ public class SettlementServiceTest {
         private final Long memberId = 1L;
 
         @Test
-        @DisplayName("성공: 암호화된 계좌를 복호화하여 DTO 세팅 및 딥링크를 생성한 뒤 정상 반환한다.")
-        void getMySettlementSuccess() {
+        @DisplayName("성공: 원화(KRW) 방인 경우 암호화된 계좌를 복호화하고 토스 딥링크를 정상 생성하여 반환한다.")
+        void getMySettlementSuccessWithKrw() {
             // given
             String encryptedAccount = "EncryptedAccountText123";
             String decryptedAccount = "3333-12-345678";
 
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            Room room = Room.builder()
+                    .roomId(roomId)
+                    .slug(slug)
+                    .baseCurrency("KRW")
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
 
             SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
                     new BigDecimal("15000"),
@@ -237,6 +243,7 @@ public class SettlementServiceTest {
 
             // then
             assertThat(response).isNotNull();
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
             assertThat(response.getTotalSendAmount()).isEqualByComparingTo("15000");
             assertThat(response.getTotalReceiveAmount()).isEqualByComparingTo("30000");
 
@@ -251,7 +258,7 @@ public class SettlementServiceTest {
             assertThat(response.getReceiveList()).hasSize(1);
             assertThat(response.getReceiveList().get(0).getSenderName()).isEqualTo("징징이");
 
-            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
             verify(settlementMapper).findSettlementSummary(roomId, memberId);
             verify(settlementMapper).findMySendSettlements(roomId, memberId);
             verify(settlementMapper).findMyReceiveSettlements(roomId, memberId);
@@ -260,10 +267,66 @@ public class SettlementServiceTest {
         }
 
         @Test
+        @DisplayName("성공: 외화(USD) 방인 경우 계좌번호는 복호화하지만 토스 딥링크는 null로 세팅된다.")
+        void getMySettlementSuccessWithNonKrw() {
+            // given
+            String encryptedAccount = "EncryptedAccountText123";
+            String decryptedAccount = "3333-12-345678";
+
+            Room room = Room.builder()
+                    .roomId(roomId)
+                    .slug(slug)
+                    .baseCurrency("USD")
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+
+            SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
+                    new BigDecimal("10.50"),
+                    BigDecimal.ZERO
+            );
+            given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(mockSummary);
+
+            RoomMySettlementResponse.SendItem sendItem = RoomMySettlementResponse.SendItem.builder()
+                    .settlementId(100L)
+                    .receiverId(2L)
+                    .receiverName("뚱이")
+                    .amount(new BigDecimal("10.50"))
+                    .bankName("Chase")
+                    .accountNumber(encryptedAccount)
+                    .remittanceLink(null)
+                    .isDone(false)
+                    .build();
+
+            given(settlementMapper.findMySendSettlements(roomId, memberId)).willReturn(List.of(sendItem));
+            given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of());
+            given(encryptionUtil.decrypt(encryptedAccount)).willReturn(decryptedAccount);
+
+            // when
+            RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("USD");
+            assertThat(response.getSendList()).hasSize(1);
+            assertThat(response.getSendList().get(0).getAccountNumber()).isEqualTo(decryptedAccount);
+            // 딥링크는 생성되지 않아야 함
+            assertThat(response.getSendList().get(0).getRemittanceLink()).isNull();
+
+            verify(remittanceLinkGenerator, never()).generateTossLink(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("성공: 보낼 돈이나 받을 돈이 없는 경우 빈 리스트와 0원을 반환한다.")
         void getMySettlementSuccessWithEmptyList() {
             // given
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
+            Room room = Room.builder()
+                    .roomId(roomId)
+                    .slug(slug)
+                    .baseCurrency("KRW")
+                    .build();
+
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
 
             SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
                     BigDecimal.ZERO, BigDecimal.ZERO
@@ -277,6 +340,7 @@ public class SettlementServiceTest {
 
             // then
             assertThat(response).isNotNull();
+            assertThat(response.getRoomBaseCurrency()).isEqualTo("KRW");
             assertThat(response.getTotalSendAmount()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(response.getTotalReceiveAmount()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(response.getSendList()).isEmpty();
@@ -289,7 +353,7 @@ public class SettlementServiceTest {
         @DisplayName("예외: 권한이 없거나 존재하지 않는 방인 경우 IllegalArgumentException 예외가 발생한다.")
         void getMySettlementThrowExceptionWhenUnauthorizedOrNotFound() {
             // given
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId))
+            given(roomAccessValidator.validateAndGetRoom(slug, memberId))
                     .willThrow(new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다."));
 
             // when & then
@@ -297,48 +361,9 @@ public class SettlementServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
 
-            verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
+            verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
             verifyNoInteractions(settlementMapper);
             verifyNoInteractions(remittanceLinkGenerator);
-        }
-
-        @Test
-        @DisplayName("성공: 보낼 내역의 수신자 계좌번호가 null인 경우 복호화를 시도하지 않고 null을 유지한다.")
-        void getMySettlementSuccessWithNullReceiverAccount() {
-            // given
-            given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-
-            SettlementMapper.SettlementSummary mockSummary = new SettlementMapper.SettlementSummary(
-                    new BigDecimal("15000"), BigDecimal.ZERO
-            );
-            given(settlementMapper.findSettlementSummary(roomId, memberId)).willReturn(mockSummary);
-
-            // 계좌가 등록되지 않은 수신자(accountNumber = null)
-            RoomMySettlementResponse.SendItem sendItem = RoomMySettlementResponse.SendItem.builder()
-                    .settlementId(100L)
-                    .receiverId(2L)
-                    .receiverName("뚱이")
-                    .amount(new BigDecimal("15000"))
-                    .bankName(null)
-                    .accountNumber(null)
-                    .remittanceLink(null)
-                    .isDone(false)
-                    .build();
-
-            given(settlementMapper.findMySendSettlements(roomId, memberId)).willReturn(List.of(sendItem));
-            given(settlementMapper.findMyReceiveSettlements(roomId, memberId)).willReturn(List.of());
-
-            // when
-            RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
-
-            // then
-            assertThat(response).isNotNull();
-            assertThat(response.getSendList()).hasSize(1);
-            assertThat(response.getSendList().get(0).getAccountNumber()).isNull();
-            assertThat(response.getSendList().get(0).getRemittanceLink()).isNull();
-
-            // encryptionUtil.decrypt는 호출되지 않아야 함
-            verify(encryptionUtil, never()).decrypt(anyString());
         }
     }
 

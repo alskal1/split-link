@@ -30,9 +30,6 @@ public interface ExpenseMapper {
     /** 개별 금액이 포함된 부담금 Bulk Insert */
     void insertExpenseShares(@Param("shares") List<ExpenseShareParam> shares);
 
-    /** 방 전체 총 지출 금액 합산 */
-    BigDecimal findTotalExpenseAmountByRoomId(@Param("roomId") Long roomId);
-
     /** 하단 지출 목록 조회 */
     List<ExpenseListResponse.ExpenseItemResponse> findExpenseItems(@Param("roomId") Long roomId,
                                                                    @Param("memberId") Long memberId);
@@ -60,14 +57,22 @@ public interface ExpenseMapper {
     /** 방 PK 기준 지출 건수 조회 */
     int countExpensesByRoomId(@Param("roomId") Long roomId);
 
+    /** 방 기준 총 지출 금액 합산 조회 */
+    BigDecimal findTotalExpenseAmountByRoomId(
+            @Param("roomId") Long roomId
+    );
+
     /** 지출 메인 정보 수정 */
     int updateExpense(@Param("expenseId") Long expenseId,
                       @Param("roomId") Long roomId,
                       @Param("payerId") Long payerId,
                       @Param("title") String title,
                       @Param("amount") BigDecimal amount,
+                      @Param("amountInBase") BigDecimal amountInBase,
                       @Param("bankName") String bankName,
                       @Param("accountNumber") String accountNumber,
+                      @Param("currency") String currency,
+                      @Param("fxRate") BigDecimal fxRate,
                       @Param("spentAt") LocalDateTime spentAt);
 
     /** 특정 지출의 기존 부담금(expense_shares) 일괄 삭제 */

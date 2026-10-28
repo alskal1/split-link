@@ -15,6 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 public class RoomMySettlementResponse {
 
+    private String roomBaseCurrency;       // 방 기준 통화
     private BigDecimal totalSendAmount;    // 내가 보낼 총 금액
     private BigDecimal totalReceiveAmount; // 내가 받을 총 금액
 
