@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { getRoomSummary } from "../api/room";
@@ -14,6 +14,7 @@ import {
   updateRemittanceStatus,
 } from "../api/settlement";
 import { createEmptyExpenseGroup } from "../utils/expenseForm";
+import { formatAmount } from "../utils/currency";
 import {
   clearMemberAccess,
   loadMemberAccess,
@@ -21,6 +22,7 @@ import {
 } from "../utils/memberAccessStorage";
 import type {
   ExpenseDetailResponse,
+  ExpenseAccountInfo,
   ExpenseFormInitResponse,
   ExpenseGroupFormValue,
   ExpenseListResponse,
@@ -39,6 +41,9 @@ import ExpenseDetail from "./ExpenseDetail";
 import SettlementRoomSetting from "./SettlementRoomSetting";
 import SettlementSummary from "./SettlementSummary";
 import settingsIcon from "../assets/settings.svg";
+
+// 지출 내역 주기적 갱신 간격 (ms)
+const EXPENSE_POLLING_INTERVAL_MS = 10000;
 
 export default function SettlementRoom() {
   const { slug } = useParams<{ slug: string }>();
@@ -244,7 +249,7 @@ function SettlementRoomContent({
    * 지출 목록/정산 요약 및 정산 집계용 지출 상세를 서버에서 새로 조회해 반영
    * (등록 · 수정 · 삭제 직후 항상 이 함수로 새로고침하여 로컬 상태가 서버와 어긋나지 않도록 함)
    */
-  const loadExpenses = useCallback(async () => {
+  const loadExpenses = useCallback(async (silent = false) => {
     const summary = await getExpenseList(slug);
     if (!summary) {
       return;
@@ -258,7 +263,8 @@ function SettlementRoomContent({
     );
 
     const hasFailure = results.some((result) => result.status === "rejected");
-    if (hasFailure) {
+    // 주기적 갱신(silent) 중에는 일시적인 실패로 토스트를 반복해서 띄우지 않음
+    if (hasFailure && !silent) {
       toast.error(
         "일부 지출 내역을 불러오지 못했어요. 화면을 새로고침해 다시 확인해주세요",
       );
@@ -280,6 +286,7 @@ function SettlementRoomContent({
         id: String(detail.expenseId),
         name: detail.title,
         amount: detail.amount,
+        currency: detail.currency,
         paidAt: detail.spentAt.slice(0, 10),
         payer: detail.payerName,
         bankName: detail.bankName,
@@ -293,7 +300,7 @@ function SettlementRoomContent({
       }));
 
     setExpenses(records);
-  }, [slug]);
+  }, [slug, getExpenseDetailWithRetry]);
 
   /**
    * 지출 입력 폼 초기 데이터(결제자/참여자 선택용 멤버 목록 등) 새로 조회해 반영
@@ -304,6 +311,8 @@ function SettlementRoomContent({
     if (init) {
       setFormInit(init);
     }
+
+    return init;
   }, [slug]);
 
   useEffect(() => {
@@ -319,6 +328,42 @@ function SettlementRoomContent({
       }
     })();
   }, [slug, loadFormInit, loadExpenses]);
+
+  // 다른 멤버의 변경 사항을 반영하기 위한 주기적 갱신 (폴링)
+  const isRefreshingRef = useRef(false);
+  const isSubmitingRef = useRef(false);
+  isSubmitingRef.current = isSubmiting;
+
+  useEffect(() => {
+    const refresh = async () => {
+      // 탭이 백그라운드이거나, 이전 갱신 또는 지출 등록이 진행 중이면 건너뜀
+      if (
+        document.hidden ||
+        isRefreshingRef.current ||
+        isSubmitingRef.current
+      ) {
+        return;
+      }
+
+      isRefreshingRef.current = true;
+      try {
+        await loadExpenses(true);
+      } catch {
+        // 일시적인 네트워크 오류는 무시하고 다음 주기에 다시 시도
+      } finally {
+        isRefreshingRef.current = false;
+      }
+    };
+
+    const timer = setInterval(refresh, EXPENSE_POLLING_INTERVAL_MS);
+    // 다른 탭/앱에 있다가 돌아오면 즉시 최신 상태로 갱신
+    document.addEventListener("visibilitychange", refresh);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadExpenses]);
 
   // 정산 실행으로 방이 잠긴 여부 (잠기면 결제내역 추가·수정·삭제, 멤버 변경 불가)
   const isLocked = expenseSummary?.isLocked ?? false;
@@ -349,57 +394,135 @@ function SettlementRoomContent({
   // 지출 입력 폼 결제자/참여자 선택용 멤버 목록 (formInit 로드 전에는 빈 배열)
   const formMembers = formInit?.roomMembers ?? [];
 
-  // formInit 로드 완료 시 초기 그룹 1개 생성 (이미 그룹이 있으면 건너뜀)
+  // 직전에 폼에 반영한 멤버 PK 목록 (멤버 구성 변경 시 신규 멤버 판별용)
+  const syncedMemberIdsRef = useRef<number[] | null>(null);
+
+  // formInit 로드 시 초기 그룹 1개 생성, 이미 그룹이 있으면 변경된 멤버 구성에 맞춰 동기화
   useEffect(() => {
     if (!formInit) {
       return;
     }
-    setGroups((prev) =>
-      prev.length === 0
-        ? [createEmptyExpenseGroup(formInit.roomMembers)]
-        : prev,
-    );
+
+    const currentIds = formInit.roomMembers.map((member) => member.memberId);
+    const prevIds = syncedMemberIdsRef.current;
+    syncedMemberIdsRef.current = currentIds;
+
+    setGroups((prev) => {
+      if (prev.length === 0) {
+        return [
+          createEmptyExpenseGroup(formInit.roomMembers, formInit.defaultAccount),
+        ];
+      }
+
+      // 제거된 멤버는 결제자/참여자에서 빼고, 새로 추가된 멤버는 참여자로 기본 선택
+      const currentSet = new Set(currentIds);
+      const prevSet = new Set(prevIds ?? []);
+      const addedIds = currentIds.filter((id) => !prevSet.has(id));
+
+      return prev.map((group) => {
+        const isPayerRemoved =
+          group.payer !== null && !currentSet.has(group.payer);
+
+        return {
+          ...group,
+          payer: isPayerRemoved ? null : group.payer,
+          bankName: isPayerRemoved ? "" : group.bankName,
+          accountNumber: isPayerRemoved ? "" : group.accountNumber,
+          items: group.items.map((item) => ({
+            ...item,
+            participants: [
+              ...item.participants.filter((id) => currentSet.has(id)),
+              ...addedIds,
+            ],
+          })),
+        };
+      });
+    });
   }, [formInit]);
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
 
-  // 상대별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
+  // 목록 항목별 결제 통화 (목록 응답에는 통화가 없어 지출 상세 기반 기록에서 조회)
+  const listCurrencyById = new Map(
+    expenses.map((expense) => [Number(expense.id), expense.currency]),
+  );
+
+  // 정산 전에는 결제한 통화 그대로 표시 (통화가 섞이면 통화별로 합산)
+  const settleKey = (name: string, currency: string) => `${name}|${currency}`;
+
+  // 통화별 총 지출 합계
+  const totalByCurrency = new Map<string, number>();
+  expenses.forEach((expense) => {
+    totalByCurrency.set(
+      expense.currency,
+      (totalByCurrency.get(expense.currency) ?? 0) + expense.amount,
+    );
+  });
+
+  // 상대·통화별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
   // 서버 정산 전 예상 금액이며, 지출의 결제자-참여자 관계를 상대별로 상계해 구함
   const balanceByMember = new Map<string, number>();
-  const addBalance = (name: string, amount: number) => {
-    balanceByMember.set(name, (balanceByMember.get(name) ?? 0) + amount);
+  const addBalance = (name: string, currency: string, amount: number) => {
+    const key = settleKey(name, currency);
+    balanceByMember.set(key, (balanceByMember.get(key) ?? 0) + amount);
   };
   expenses.forEach((expense) => {
     if (expense.isMyPayment) {
       // 내가 결제한 지출: 다른 참여자의 부담금은 내가 받을 금액
       expense.participantShares
         .filter((share) => !share.isSelf)
-        .forEach((share) => addBalance(share.name, -share.shareAmount));
+        .forEach((share) =>
+          addBalance(share.name, expense.currency, -share.shareAmount),
+        );
       return;
     }
 
     // 다른 사람이 결제한 지출: 내 부담금은 결제자에게 보낼 금액
     const myShare = expense.participantShares.find((share) => share.isSelf);
     if (myShare) {
-      addBalance(expense.payer, myShare.shareAmount);
+      addBalance(expense.payer, expense.currency, myShare.shareAmount);
     }
   });
 
-  const balances = Array.from(balanceByMember.values()).map(Math.round);
-  const estimatedSendAmount = balances
-    .filter((balance) => balance > 0)
-    .reduce((sum, balance) => sum + balance, 0);
-  const estimatedReceiveAmount = balances
-    .filter((balance) => balance < 0)
-    .reduce((sum, balance) => sum - balance, 0);
+  const estimatedSendByCurrency = new Map<string, number>();
+  const estimatedReceiveByCurrency = new Map<string, number>();
+  balanceByMember.forEach((balance, key) => {
+    const currency = key.slice(key.lastIndexOf("|") + 1);
+    const rounded = Math.round(balance);
+    const target =
+      rounded > 0 ? estimatedSendByCurrency : estimatedReceiveByCurrency;
+    if (rounded !== 0) {
+      target.set(currency, (target.get(currency) ?? 0) + Math.abs(rounded));
+    }
+  });
 
-  // 정산 실행 후에는 실제 송금 대상 기준인 서버 정산 값을 사용
-  const mySendAmount = mySettlement
-    ? Math.round(mySettlement.totalSendAmount)
-    : estimatedSendAmount;
-  const myReceiveAmount = mySettlement
-    ? Math.round(mySettlement.totalReceiveAmount)
-    : estimatedReceiveAmount;
+  /**
+   * 통화별 금액을 "100 USD + 50,000원" 형태로 변환 (금액이 없으면 기준통화 0)
+   * @param amountByCurrency 통화별 금액
+   */
+  const formatByCurrency = (amountByCurrency: Map<string, number>): string => {
+    const parts = Array.from(amountByCurrency.entries()).map(
+      ([currency, amount]) => formatAmount(amount, currency),
+    );
+    return parts.length > 0 ? parts.join(" + ") : formatAmount(0, baseCurrency);
+  };
+
+  // 정산 계산하기 실행 전후로 요약 카드 금액이 바뀌지 않도록 항상 결제 통화 기준 예상 금액을 사용
+  const mySendAmount = Array.from(estimatedSendByCurrency.values()).reduce(
+    (a, b) => a + b,
+    0,
+  );
+  const myReceiveAmount = Array.from(
+    estimatedReceiveByCurrency.values(),
+  ).reduce((a, b) => a + b, 0);
+
+  // 표시용 문자열 (결제 통화 기준)
+  const totalText =
+    totalByCurrency.size === 0
+      ? formatAmount(totalAmount, baseCurrency)
+      : formatByCurrency(totalByCurrency);
+  const receiveText = formatByCurrency(estimatedReceiveByCurrency);
+  const sendText = formatByCurrency(estimatedSendByCurrency);
 
   /**
    * 그룹 값 변경
@@ -410,7 +533,30 @@ function SettlementRoomContent({
     groupIndex: number,
     group: ExpenseGroupFormValue,
   ) => {
-    setGroups((prev) => prev.map((g, i) => (i === groupIndex ? group : g)));
+    setGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== groupIndex) {
+          return g;
+        }
+
+        // 결제자가 바뀌면 본인일 때만 저장된 내 계좌를 채우고, 다른 멤버일 때는 비움
+        if (formInit && g.payer !== group.payer) {
+          const isSelfPayer = group.payer === formInit.currentMemberId;
+
+          return {
+            ...group,
+            bankName: isSelfPayer
+              ? (formInit.defaultAccount?.bankName ?? "")
+              : "",
+            accountNumber: isSelfPayer
+              ? (formInit.defaultAccount?.accountNumber ?? "")
+              : "",
+          };
+        }
+
+        return group;
+      }),
+    );
   };
 
   /**
@@ -421,7 +567,16 @@ function SettlementRoomContent({
       setGroups((prev) =>
         prev.map((group, i) =>
           i === 0 && group.payer === null
-            ? { ...group, payer: formInit.currentMemberId }
+            ? {
+                ...group,
+                payer: formInit.currentMemberId,
+                // 본인을 기본 결제자로 선택할 때 저장된 내 계좌를 함께 채움 (이미 입력한 값은 유지)
+                bankName:
+                  group.bankName || (formInit.defaultAccount?.bankName ?? ""),
+                accountNumber:
+                  group.accountNumber ||
+                  (formInit.defaultAccount?.accountNumber ?? ""),
+              }
             : group,
         ),
       );
@@ -432,8 +587,8 @@ function SettlementRoomContent({
   /**
    * 입력 폼 초기화
    */
-  const handleReset = () => {
-    setGroups([createEmptyExpenseGroup(formMembers)]);
+  const handleReset = (account: ExpenseAccountInfo | null = null) => {
+    setGroups([createEmptyExpenseGroup(formMembers, account)]);
   };
 
   // 유효성 체크
@@ -471,7 +626,7 @@ function SettlementRoomContent({
         return {
           payerId: group.payer,
           spentAt: `${group.paidAt}T00:00:00`,
-          currency: group.isOverseas ? group.currency : undefined,
+          currency: group.isOverseas ? group.currency : baseCurrency,
           bankName: group.bankName,
           accountNumber: group.accountNumber,
           items: group.items.map((item) => ({
@@ -483,9 +638,13 @@ function SettlementRoomContent({
       });
 
       await createExpenses(slug, { expenseGroups });
-      await loadExpenses();
+      // 방금 등록한 계좌가 서버에 저장되므로 최신 기본 계좌를 다시 조회해 다음 지출 폼에 반영
+      const [, latestInit] = await Promise.all([
+        loadExpenses(),
+        loadFormInit().catch(() => undefined),
+      ]);
 
-      handleReset();
+      handleReset((latestInit ?? formInit)?.defaultAccount ?? null);
       setIsAddExpenseOpen(false);
       toast.success("지출을 등록했어요");
     } catch (error) {
@@ -672,11 +831,11 @@ function SettlementRoomContent({
 
         if (received) {
           toast.success(
-            `${received.senderName}님에게 ${received.amount.toLocaleString("ko-KR")}원을 받았어요`,
+            `${received.senderName}님에게 ${formatAmount(received.amount, baseCurrency)}을 받았어요`,
           );
         } else if (sent) {
           toast.success(
-            `${sent.receiverName}님에게 ${sent.amount.toLocaleString("ko-KR")}원을 보냈어요`,
+            `${sent.receiverName}님에게 ${formatAmount(sent.amount, baseCurrency)}을 보냈어요`,
           );
         }
       }
@@ -743,7 +902,7 @@ function SettlementRoomContent({
             </div>
           </div>
           <div className="mt-1.5 mb-[18px] text-[length:clamp(28px,8vw,36px)] font-extrabold tracking-[-0.04em] whitespace-nowrap tabular-nums">
-            {totalAmount.toLocaleString("ko-KR")}원
+            {totalText}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-[14px] bg-white/10 p-3.5">
@@ -753,7 +912,7 @@ function SettlementRoomContent({
                   myReceiveAmount > 0 ? "text-[#8fd9b0]" : "text-white/45"
                 }`}
               >
-                {myReceiveAmount.toLocaleString("ko-KR")}원
+                {receiveText}
               </div>
             </div>
             <div className="rounded-[14px] bg-white/10 p-3.5">
@@ -763,7 +922,7 @@ function SettlementRoomContent({
                   mySendAmount > 0 ? "text-[#f2a99b]" : "text-white/45"
                 }`}
               >
-                {mySendAmount.toLocaleString("ko-KR")}원
+                {sendText}
               </div>
             </div>
           </div>
@@ -817,7 +976,10 @@ function SettlementRoomContent({
                     </div>
                   </div>
                   <div className="text-[15px] font-extrabold whitespace-nowrap tabular-nums">
-                    {expense.amount.toLocaleString("ko-KR")}원
+                    {formatAmount(
+                      expense.amount,
+                      listCurrencyById.get(expense.expenseId) ?? baseCurrency,
+                    )}
                   </div>
                 </button>
               ))}
@@ -836,6 +998,7 @@ function SettlementRoomContent({
         <ExpenseAddSheet
           group={groups[0]}
           members={formMembers}
+          baseCurrency={baseCurrency}
           isValid={isValid && !!formInit}
           isSubmitting={isSubmiting}
           onChange={(next) => handleGroupChange(0, next)}
@@ -897,6 +1060,14 @@ function SettlementRoomContent({
           baseCurrency={baseCurrency}
           isLocked={isLocked}
           expenseCount={expenseSummary?.expenses.length ?? 0}
+          expenseMemberNames={[
+            ...new Set(
+              expenses.flatMap((expense) => [
+                expense.payer,
+                ...expense.participantShares.map((share) => share.name),
+              ]),
+            ),
+          ]}
           onClose={() => setIsSettingOpen(false)}
           onSaved={async (updated, newPin, savedMembers) => {
             const isRefreshed = await onSettingSaved(
@@ -927,6 +1098,7 @@ function SettlementRoomContent({
         <ExpenseDetail
           slug={slug}
           expense={selectedExpense}
+          baseCurrency={baseCurrency}
           isLocked={isLocked}
           onClose={() => setSelectedExpense(null)}
           onUpdated={handleExpenseUpdated}
@@ -949,6 +1121,7 @@ function SettlementRoomContent({
           roomTitle={room.title}
           memberCount={formMembers.length}
           totalAmount={totalAmount}
+          baseCurrency={baseCurrency}
           myName={expenseSummary?.currentMemberName ?? ""}
           sendList={mySettlement.sendList}
           receiveList={mySettlement.receiveList}

@@ -17,6 +17,7 @@ interface EditableMember {
   key: string;
   memberId?: number;
   name: string;
+  hasExpenses?: boolean;
 }
 
 interface SettlementRoomSettingProps {
@@ -27,6 +28,7 @@ interface SettlementRoomSettingProps {
   baseCurrency: string;
   isLocked: boolean;
   expenseCount: number;
+  expenseMemberNames: string[];
   onClose: () => void;
   onSaved: (
     updated: { title: string; baseCurrency: string; memberNames: string[] },
@@ -45,6 +47,7 @@ interface SettlementRoomSettingProps {
  * @param baseCurrency 기준통화
  * @param isLocked 방 잠금 여부 (잠기면 참여 멤버 추가·삭제 불가)
  * @param expenseCount 결제내역 건수 (삭제 확인 문구용)
+ * @param expenseMemberNames 결제자 또는 부담자로 지출 내역에 엮인 멤버 이름 목록 (멤버 삭제 제한용)
  * @param onClose 닫기 이벤트
  * @param onSaved 저장 완료 이벤트
  * @param onDeleted 삭제 완료 이벤트
@@ -57,6 +60,7 @@ export default function SettlementRoomSetting({
   baseCurrency,
   isLocked,
   expenseCount,
+  expenseMemberNames,
   onClose,
   onSaved,
   onDeleted,
@@ -71,6 +75,7 @@ export default function SettlementRoomSetting({
       key: `m-${member.memberId}`,
       memberId: member.memberId,
       name: member.name,
+      hasExpenses: expenseMemberNames.includes(member.name),
     })),
   );
   // 신규 멤버 로컬 키 발급용
@@ -151,6 +156,14 @@ export default function SettlementRoomSetting({
    */
   const handleRemoveMember = (key: string) => {
     if (isLocked) {
+      return;
+    }
+
+    const target = members.find((member) => member.key === key);
+
+    // 결제자 또는 부담자로 지출 내역에 엮인 기존 멤버는 삭제 불가 (저장 시 서버 검증과 동일 기준)
+    if (target?.hasExpenses) {
+      toast.error(`'${target.name}'님은 지출 내역이 존재하여 삭제할 수 없어요`);
       return;
     }
 
