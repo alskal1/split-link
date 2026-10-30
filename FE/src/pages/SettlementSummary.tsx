@@ -4,6 +4,7 @@ import BottomSheet from "../components/BottomSheet";
 import Modal from "../components/Modal";
 import QrCode from "../components/QrCode";
 import { isMobileDevice } from "../utils/device";
+import { formatAmount } from "../utils/currency";
 import type {
   SettlementReceiveItem,
   SettlementSendItem,
@@ -13,6 +14,7 @@ interface SettlementSummaryProps {
   roomTitle: string;
   memberCount: number;
   totalAmount: number;
+  baseCurrency: string;
   myName: string;
   sendList: SettlementSendItem[];
   receiveList: SettlementReceiveItem[];
@@ -28,6 +30,7 @@ interface SettlementSummaryProps {
  * @param roomTitle 방 제목
  * @param memberCount 참여 멤버 수
  * @param totalAmount 방 전체 지출 합계
+ * @param baseCurrency 정산방 기준통화
  * @param myName 내 이름
  * @param sendList 결제자별로 보낼 금액 목록
  * @param receiveList 나에게 보내야 할 사람별 받을 금액 목록
@@ -40,6 +43,7 @@ export default function SettlementSummary({
   roomTitle,
   memberCount,
   totalAmount,
+  baseCurrency,
   myName,
   sendList,
   receiveList,
@@ -180,7 +184,7 @@ export default function SettlementSummary({
                 {roomTitle} · {memberCount}명
               </div>
               <div className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums">
-                {totalAmount.toLocaleString("ko-KR")}원
+                {formatAmount(totalAmount, baseCurrency)}
               </div>
             </div>
           </div>
@@ -191,9 +195,9 @@ export default function SettlementSummary({
                 <span>받은 금액</span>
                 <span className="whitespace-nowrap">
                   <b className="text-ink">
-                    {receivedTotal.toLocaleString("ko-KR")}원
+                    {formatAmount(receivedTotal, baseCurrency)}
                   </b>{" "}
-                  / {receiveTotal.toLocaleString("ko-KR")}원
+                  / {formatAmount(receiveTotal, baseCurrency)}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-mdbg-[#edece7]">
@@ -253,7 +257,7 @@ export default function SettlementSummary({
                     </div>
                     <div className="flex shrink-0 items-center gap-2.5">
                       <span className="text-[15px] font-bold tabular-nums">
-                        {row.amount.toLocaleString("ko-KR")}원
+                        {formatAmount(row.amount, baseCurrency)}
                       </span>
                       <span
                         className={`rounded-md px-2 py-1 text-[11px] font-bold transition-colors ${
@@ -364,7 +368,7 @@ export default function SettlementSummary({
               휴대폰 토스 앱 카메라로 QR코드를 스캔해서
               <br />
               {qrModalItem.receiverName}님에게{" "}
-              {qrModalItem.amount.toLocaleString()}원을 송금해주세요
+              {formatAmount(qrModalItem.amount, baseCurrency)}을 송금해주세요
             </div>
           </div>
         </Modal>

@@ -4,8 +4,4 @@ export const BASE_CURRENCY_CARDS = [
   { symbol: "$", label: "달러 (USD)", value: "USD" },
   { symbol: "¥", label: "엔 (JPY)", value: "JPY" },
   { symbol: "€", label: "유로 (EUR)", value: "EUR" },
-  { symbol: "元", label: "위안 (CNY)", value: "CNY" },
-  { symbol: "฿", label: "바트 (THB)", value: "THB" },
-  { symbol: "₫", label: "동 (VND)", value: "VND" },
-  { symbol: "+", label: "기타", value: "ETC" },
 ];

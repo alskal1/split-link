@@ -132,7 +132,7 @@ export default function ExpenseForm({
 
         {group.isOverseas && (
           <Select
-            options={BASE_CURRENCY_CARDS.filter((opt) => opt.value !== "ETC")}
+            options={BASE_CURRENCY_CARDS}
             option={group.currency}
             onChange={(value) => onChange({ ...group, currency: value })}
           />

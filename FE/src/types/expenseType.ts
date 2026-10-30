@@ -51,7 +51,8 @@ export interface ExpenseRecordParticipantShare {
  * 지출 상세 조회(ExpenseDetailResponse) 응답을 정산 집계용으로 가공한 값
  * @param id 항목 식별자
  * @param name 항목명
- * @param amount 금액
+ * @param amount 금액 (결제 통화 기준)
+ * @param currency 결제 통화 (예: KRW, USD)
  * @param paidAt 결제일자 (yyyy-mm-dd)
  * @param payer 결제자
  * @param bankName 송금받을 계좌 은행명
@@ -63,6 +64,7 @@ export interface ExpenseRecord {
   id: string;
   name: string;
   amount: number;
+  currency: string;
   paidAt: string;
   payer: string;
   bankName: string;
@@ -215,6 +217,8 @@ export interface ExpenseUpdateFormMemberInfo {
  * @param amount 결제 금액
  * @param currency 결제 통화 (수정 불가, 표시용)
  * @param spentAt 결제 일시 (ISO-8601)
+ * @param bankName 송금받을 계좌 은행명
+ * @param accountNumber 송금받을 계좌번호
  * @param payerId 결제자 PK
  * @param targetMemberIds 지출에 지정된 참여자 PK 목록
  * @param roomMembers 결제자/참여자 선택용 방 전체 멤버 목록
@@ -224,6 +228,8 @@ export interface ExpenseUpdateFormResponse {
   title: string;
   amount: number;
   currency: string;
+  bankName: string;
+  accountNumber: string;
   spentAt: string;
   payerId: number;
   targetMemberIds: number[];
@@ -235,6 +241,8 @@ export interface ExpenseUpdateFormResponse {
  * @param payerId 결제자 PK
  * @param title 지출 항목명
  * @param amount 결제 금액
+ * @param bankName 송금받을 계좌 은행명 (결제자 본인만 변경 가능, 그 외에는 서버가 기존 값 유지)
+ * @param accountNumber 송금받을 계좌번호 (결제자 본인만 변경 가능, 그 외에는 서버가 기존 값 유지)
  * @param spentAt 결제 일시 (ISO-8601, 예: 2026-09-17T00:00:00)
  * @param targetMemberIds 함께 정산할 참여 멤버 ID 목록
  */
@@ -242,6 +250,8 @@ export interface ExpenseUpdateRequest {
   payerId: number;
   title: string;
   amount: number;
+  bankName: string;
+  accountNumber: string;
   spentAt: string;
   targetMemberIds: number[];
 }

@@ -17,8 +17,6 @@ export default function NewSettlementRoom() {
   const [roomName, setRoomName] = useState("");
   // 기준통화
   const [baseCurrency, setBaseCurrency] = useState("KRW");
-  // 기타통화
-  const [etcCurrencyCode, setEtcCurrencyCode] = useState("");
   // 참여멤버 입력란
   const [memberInput, setMemberInput] = useState("");
   // 참여멤버
@@ -31,14 +29,12 @@ export default function NewSettlementRoom() {
   // 유효성 체크
   const isValid =
     roomName.trim().length > 0 &&
-    (baseCurrency !== "ETC" || etcCurrencyCode.trim().length > 0) &&
     members.length > 0 &&
     entryCode.length >= 4 &&
     entryCode.length <= 10;
 
   const isEntryCodeLenValid = entryCode.length >= 4 && entryCode.length <= 10;
-  const isCurrencyValid =
-    baseCurrency !== "ETC" || etcCurrencyCode.trim().length > 0;
+  const isCurrencyValid = baseCurrency.length > 0;
   // 입력 완료된 항목 수 (모임 이름, 기준 통화, 참여 멤버, 입장코드)
   const doneCount = [
     roomName.trim().length > 0,
@@ -127,8 +123,7 @@ export default function NewSettlementRoom() {
       // 정산방 생성 API 요청
       const data = await createSettlementRoom({
         title: roomName.trim(),
-        baseCurrency:
-          baseCurrency === "ETC" ? etcCurrencyCode.trim() : baseCurrency,
+        baseCurrency,
         pin: entryCode,
         memberNames: members,
       });
@@ -232,15 +227,6 @@ export default function NewSettlementRoom() {
               />
             ))}
           </div>
-          {baseCurrency === "ETC" && (
-            <input
-              value={etcCurrencyCode}
-              onChange={(e) => setEtcCurrencyCode(e.target.value)}
-              placeholder="통화 코드 입력 (예: PHP)"
-              maxLength={3}
-              className="mt-3 w-full animate-sl-up rounded-xl border-[1.5px] border-line bg-white px-4 py-3.5 text-[15px] outline-none placeholder:text-[#b5b3ad] focus:border-brand"
-            />
-          )}
         </section>
 
         {/* 03 참여 멤버 */}
