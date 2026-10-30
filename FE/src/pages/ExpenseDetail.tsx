@@ -5,6 +5,12 @@ import {
   getExpenseUpdateForm,
   updateExpense,
 } from "../api/expense";
+import { BANK_OPTIONS } from "../constants/bank";
+import {
+  formatAmountInput,
+  getCurrencyUnit,
+  sanitizeAmountInput,
+} from "../utils/currency";
 import type { ExpenseDetailResponse } from "../types/expenseType";
 import BottomSheet from "../components/BottomSheet";
 import ConfirmModal from "../components/ConfirmModal";
@@ -12,6 +18,7 @@ import ConfirmModal from "../components/ConfirmModal";
 interface ExpenseDetailProps {
   slug: string;
   expense: ExpenseDetailResponse;
+  baseCurrency: string;
   isLocked: boolean;
   onClose: () => void;
   onUpdated: () => void;
@@ -22,6 +29,7 @@ interface ExpenseDetailProps {
  * 결제내역 항목 클릭 시 뜨는 상세 바텀시트 (조회 · 수정 · 삭제)
  * @param slug 방 슬러그
  * @param expense 조회 대상 지출 상세 정보
+ * @param baseCurrency 정산방 기준통화 (지출 결제 통화가 없을 때 금액 단위로 대체 표시)
  * @param isLocked 방 잠금 여부 (잠기면 수정 폼 조회 없이 조회 전용으로 표시하고 수정/삭제 불가)
  * @param onClose 닫기 이벤트
  * @param onUpdated 수정 완료 이벤트
@@ -30,6 +38,7 @@ interface ExpenseDetailProps {
 export default function ExpenseDetail({
   slug,
   expense,
+  baseCurrency,
   isLocked,
   onClose,
   onUpdated,
@@ -60,6 +69,10 @@ export default function ExpenseDetail({
   const [amount, setAmount] = useState(String(expense.amount));
   const [spentAt, setSpentAt] = useState(expense.spentAt.slice(0, 10));
   const [payerId, setPayerId] = useState(String(expense.payerId));
+  const [bankName, setBankName] = useState(expense.bankName ?? "");
+  const [accountNumber, setAccountNumber] = useState(
+    expense.accountNumber ?? "",
+  );
   const [targetMemberIds, setTargetMemberIds] = useState<number[]>(
     expense.targetMembers.map((member) => member.memberId),
   );
@@ -94,6 +107,8 @@ export default function ExpenseDetail({
         setAmount(String(form.amount));
         setSpentAt(form.spentAt.slice(0, 10));
         setPayerId(String(form.payerId));
+        setBankName(form.bankName ?? "");
+        setAccountNumber(form.accountNumber ?? "");
         setTargetMemberIds(form.targetMemberIds);
       } catch (error) {
         if (cancelled) {
@@ -122,7 +137,17 @@ export default function ExpenseDetail({
     title.trim().length > 0 &&
     Number(amount) > 0 &&
     payerId.length > 0 &&
+    bankName.trim().length > 0 &&
+    accountNumber.trim().length > 0 &&
     targetMemberIds.length > 0;
+
+  // 계좌 정보는 지출의 결제자 본인만 수정 가능 (그 외에는 조회만 가능)
+  const canEditAccount = expense.isMyPayment && !isLocked;
+  // 기존 은행명이 선택지에 없는 값이어도 선택 상태가 유지되도록 옵션에 포함
+  const bankOptions =
+    bankName && !BANK_OPTIONS.some((option) => option.value === bankName)
+      ? [...BANK_OPTIONS, { label: bankName, value: bankName }]
+      : BANK_OPTIONS;
 
   /**
    * 참여자 선택 토글
@@ -151,6 +176,8 @@ export default function ExpenseDetail({
         payerId: Number(payerId),
         title: title.trim(),
         amount: Number(amount),
+        bankName,
+        accountNumber: accountNumber.trim(),
         spentAt: `${spentAt}T00:00:00`,
         targetMemberIds,
       });
@@ -231,32 +258,34 @@ export default function ExpenseDetail({
         }
       >
         <div className="mb-4">
-          <div className="mb-2 text-xs font-bold text-ink-soft">금액</div>
+          <div className="mb-2 text-xs font-bold text-ink-soft">
+            금액 ({getCurrencyUnit(expense.currency || baseCurrency)})
+          </div>
           <input
             className={`${fieldClass} text-xl font-extrabold tabular-nums`}
-            inputMode="numeric"
-            value={amount ? Number(amount).toLocaleString("ko-KR") : ""}
+            inputMode="decimal"
+            value={formatAmountInput(amount)}
             disabled={isLocked}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+            onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))}
           />
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-2.5">
-          <div>
+          <div className="min-w-0">
             <div className="mb-2 text-xs font-bold text-ink-soft">결제일자</div>
             <input
               type="date"
-              className={fieldClass}
+              className={`${fieldClass} min-w-0 appearance-none px-3`}
               value={spentAt}
               disabled={isLocked}
               onChange={(e) => setSpentAt(e.target.value)}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="mb-2 text-xs font-bold text-ink-soft">결제자</div>
             <div className="relative">
               <select
-                className={`${fieldClass} appearance-none pr-10 font-bold`}
+                className={`${fieldClass} min-w-0 appearance-none truncate pr-10 font-bold`}
                 value={payerId}
                 disabled={isLocked}
                 onChange={(e) => setPayerId(e.target.value)}
@@ -289,11 +318,37 @@ export default function ExpenseDetail({
           <div className="mb-2 text-xs font-bold text-ink-soft">
             송금받을 계좌
           </div>
-          <div className="rounded-xl bg-white px-4 py-3.5 text-[15px] font-semibold">
-            {expense.bankName || expense.accountNumber
-              ? `${expense.bankName} ${expense.accountNumber}`.trim()
-              : "등록된 계좌가 없어요"}
-          </div>
+          {canEditAccount ? (
+            <div className="flex items-center gap-2">
+              <select
+                className={`${fieldClass} flex-1 font-bold`}
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+              >
+                <option value="">은행 선택</option>
+                {bankOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                className={`${fieldClass} flex-1`}
+                inputMode="numeric"
+                placeholder="계좌번호"
+                value={accountNumber}
+                onChange={(e) =>
+                  setAccountNumber(e.target.value.replace(/[^0-9-]/g, ""))
+                }
+              />
+            </div>
+          ) : (
+            <div className="rounded-xl bg-white px-4 py-3.5 text-[15px] font-semibold">
+              {bankName || accountNumber
+                ? `${bankName} ${accountNumber}`.trim()
+                : "등록된 계좌가 없어요"}
+            </div>
+          )}
         </div>
 
         <div className="mb-2">

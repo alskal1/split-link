@@ -3,6 +3,11 @@ import { BANK_OPTIONS } from "../constants/bank";
 import { BASE_CURRENCY_CARDS } from "../constants/currency";
 import { AVATAR_PALETTE } from "../constants/avatar";
 import { createEmptyExpenseItem, toLocalIso } from "../utils/expenseForm";
+import {
+  formatAmountInput,
+  getCurrencyUnit,
+  sanitizeAmountInput,
+} from "../utils/currency";
 import type {
   ExpenseFormMemberInfo,
   ExpenseGroupFormValue,
@@ -11,19 +16,14 @@ import type {
 import BottomSheet from "./BottomSheet";
 import ExpenseDatePicker from "./ExpenseDatePicker";
 
-// 국내 결제를 나타내는 통화 select 값
+// 기준통화 결제(방 생성 시 선택한 통화)를 나타내는 통화 select 값
 const DOMESTIC = "KR";
 
 // 통화 select에서 "기타(직접입력)"를 나타내는 값
-const ETC = "ETC";
-
-// 해외 결제로 선택 가능한 통화 (원화 제외, 기타 포함)
-const OVERSEAS_CURRENCIES = BASE_CURRENCY_CARDS.filter(
-  (opt) => opt.value !== "KRW",
-);
 
 interface ExpenseAddSheetProps {
   group: ExpenseGroupFormValue;
+  baseCurrency: string;
   members: ExpenseFormMemberInfo[];
   isValid: boolean;
   isSubmitting: boolean;
@@ -35,6 +35,7 @@ interface ExpenseAddSheetProps {
 /**
  * 지출 추가 바텀시트 (결제자 · 결제일자 · 통화 · 계좌 + 지출 항목 목록)
  * @param group 입력 중인 지출 그룹
+ * @param baseCurrency 정산방 기준통화 (기본 결제 통화로 표시)
  * @param members 결제자/참여자로 선택 가능한 멤버 목록
  * @param isValid 제출 가능 여부
  * @param isSubmitting 등록 진행 여부
@@ -45,6 +46,7 @@ interface ExpenseAddSheetProps {
  */
 export default function ExpenseAddSheet({
   group,
+  baseCurrency,
   members,
   isValid,
   isSubmitting,
@@ -54,8 +56,6 @@ export default function ExpenseAddSheet({
 }: ExpenseAddSheetProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isBankOpen, setIsBankOpen] = useState(true);
-  // 통화를 "기타"로 선택해 코드를 직접 입력 중인지 여부
-  const [isEtcCurrency, setIsEtcCurrency] = useState(false);
 
   const today = new Date();
   const todayIso = toLocalIso(today);
@@ -69,18 +69,18 @@ export default function ExpenseAddSheet({
     return `${Number(m)}월 ${Number(d)}일`;
   };
 
-  const currencyValue = !group.isOverseas
-    ? DOMESTIC
-    : isEtcCurrency
-      ? ETC
-      : group.currency;
+  // 기준통화 외에 선택 가능한 통화
+  const overseasCurrencies = BASE_CURRENCY_CARDS.filter(
+    (opt) => opt.value !== baseCurrency,
+  );
+  const baseUnit = getCurrencyUnit(baseCurrency);
+
+  const currencyValue = !group.isOverseas ? DOMESTIC : group.currency;
   const currencyLabel = !group.isOverseas
-    ? "국내 결제"
-    : isEtcCurrency
-      ? group.currency || "기타"
-      : (OVERSEAS_CURRENCIES.find((opt) => opt.value === group.currency)
-          ?.label ?? "해외");
-  const unit = group.isOverseas ? group.currency || "통화" : "원";
+    ? `${baseUnit} 결제`
+    : (overseasCurrencies.find((opt) => opt.value === group.currency)?.label ??
+      "해외");
+  const unit = group.isOverseas ? group.currency || "통화" : baseUnit;
   const hasBank = group.bankName.length > 0 || group.accountNumber.length > 0;
   const bankChip = hasBank
     ? `${group.bankName || "계좌"}${
@@ -111,19 +111,10 @@ export default function ExpenseAddSheet({
    */
   const handleCurrencyChange = (value: string) => {
     if (value === DOMESTIC) {
-      setIsEtcCurrency(false);
       onChange({ ...group, isOverseas: false });
       return;
     }
 
-    if (value === ETC) {
-      // 직접 입력할 코드를 비워서 시작 (이전에 고른 통화가 남지 않도록)
-      setIsEtcCurrency(true);
-      onChange({ ...group, isOverseas: true, currency: "" });
-      return;
-    }
-
-    setIsEtcCurrency(false);
     onChange({ ...group, isOverseas: true, currency: value });
   };
 
@@ -305,8 +296,8 @@ export default function ExpenseAddSheet({
             aria-label="결제 통화"
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           >
-            <option value={DOMESTIC}>국내 결제 (원)</option>
-            {OVERSEAS_CURRENCIES.map((opt) => (
+            <option value={DOMESTIC}>기준통화 결제 ({baseUnit})</option>
+            {overseasCurrencies.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
@@ -349,25 +340,6 @@ export default function ExpenseAddSheet({
             onChange({ ...group, paidAt });
             setIsCalendarOpen(false);
           }}
-        />
-      )}
-
-      {group.isOverseas && isEtcCurrency && (
-        <input
-          value={group.currency}
-          onChange={(e) =>
-            onChange({
-              ...group,
-              currency: e.target.value
-                .replace(/[^a-zA-Z]/g, "")
-                .toUpperCase()
-                .slice(0, 3),
-            })
-          }
-          placeholder="통화 코드 입력 (예: PHP)"
-          maxLength={3}
-          aria-label="통화 코드"
-          className="mb-2.5 w-full animate-sl-up rounded-xl border-[1.5px] border-line bg-white px-3.5 py-3 text-[15px] font-semibold outline-none placeholder:font-normal placeholder:text-[#b5b3ad] focus:border-brand"
         />
       )}
 
@@ -444,16 +416,14 @@ export default function ExpenseAddSheet({
                 className="min-w-0 flex-1 bg-transparent py-1.5 text-base font-bold outline-none placeholder:font-normal placeholder:text-[#b5b3ad]"
               />
               <input
-                value={
-                  item.amount ? Number(item.amount).toLocaleString("ko-KR") : ""
-                }
+                value={formatAmountInput(item.amount)}
                 onChange={(e) =>
                   handleItemChange(item.id, {
-                    amount: e.target.value.replace(/[^0-9]/g, "").slice(0, 10),
+                    amount: sanitizeAmountInput(e.target.value),
                   })
                 }
                 placeholder="0"
-                inputMode="numeric"
+                inputMode="decimal"
                 className="w-[44%] min-w-0 bg-transparent py-1.5 text-right text-lg font-extrabold tabular-nums outline-none placeholder:font-normal placeholder:text-[#b5b3ad]"
               />
               <span className="text-[15px] font-extrabold text-ink-soft">
@@ -523,7 +493,7 @@ export default function ExpenseAddSheet({
               })}
               <span className="ml-auto text-xs font-bold whitespace-nowrap text-brand tabular-nums">
                 {count
-                  ? `${count}명 · 1인 ${Math.ceil(amount / count).toLocaleString("ko-KR")}${unit}`
+                  ? `${count}명 · 1인 ${(Math.ceil((amount / count) * 100) / 100).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}${unit}`
                   : "선택 안 됨"}
               </span>
             </div>
