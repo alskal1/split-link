@@ -193,33 +193,37 @@ export default function ExpenseAddSheet({
     >
       {/* 결제자 */}
       <div className="mb-2 text-xs font-bold text-ink-soft">결제자</div>
-      <div className="-mx-5 mb-[18px] flex gap-1.5 overflow-x-auto px-5 pb-0.5 [scrollbar-width:none]">
-        {members.map((member, i) => {
-          const selected = group.payer === member.memberId;
-          const [bg, color] = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
-
-          return (
-            <button
-              key={member.memberId}
-              type="button"
-              onClick={() => onChange({ ...group, payer: member.memberId })}
-              className={`flex shrink-0 cursor-pointer items-center gap-[7px] rounded-full py-1.5 pr-3.5 pl-1.5 text-sm font-bold transition-colors active:scale-95 ${
-                selected ? "bg-ink text-white" : "bg-white text-ink"
-              }`}
-            >
-              <span
-                className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold"
-                style={{
-                  backgroundColor: selected ? "#fff" : bg,
-                  color,
-                }}
-              >
-                {member.name.slice(0, 1)}
-              </span>
+      <div className="relative mb-[18px]">
+        <select
+          className="w-full appearance-none truncate rounded-xl border-[1.5px] border-line bg-white px-4 py-3 pr-10 text-[15px] font-bold outline-none transition-colors focus:border-brand"
+          value={group.payer !== null ? String(group.payer) : ""}
+          onChange={(e) =>
+            onChange({
+              ...group,
+              payer: e.target.value ? Number(e.target.value) : null,
+            })
+          }
+        >
+          <option value="">결제자 선택</option>
+          {members.map((member) => (
+            <option key={member.memberId} value={String(member.memberId)}>
               {member.name}
-            </button>
-          );
-        })}
+            </option>
+          ))}
+        </select>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#5F5E5A"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </div>
 
       {/* 날짜 · 통화 · 계좌 칩 */}
@@ -457,37 +461,27 @@ export default function ExpenseAddSheet({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {members.map((member) => {
+              {members.map((member, i) => {
                 const selected = item.participants.includes(member.memberId);
+                const [bg, color] = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
 
                 return (
                   <button
                     key={member.memberId}
                     type="button"
+
                     onClick={() => toggleParticipant(item, member.memberId)}
-                    className={`flex cursor-pointer items-center gap-1 rounded-full px-[11px] py-[7px] text-[13px] font-bold transition-colors active:scale-95 ${
-                      selected
-                        ? "bg-ink text-white"
-                        : "bg-[#edece7] text-ink-soft"
+                    className={`flex cursor-pointer items-center gap-2 rounded-full border border-line bg-white py-[5px] pr-3 pl-[5px] transition-opacity active:scale-95 ${
+                      selected ? "" : "opacity-45"
                     }`}
                   >
                     <span
-                      className={`flex ${selected ? "opacity-100" : "opacity-35"}`}
+                      className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-xs font-extrabold"
+                      style={{ backgroundColor: bg, color }}
                     >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
+                      {member.name.slice(0, 1)}
                     </span>
-                    {member.name}
+                    <span className="text-sm font-semibold">{member.name}</span>
                   </button>
                 );
               })}
