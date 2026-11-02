@@ -183,8 +183,11 @@ export default function SettlementSummary({
               <div className="mb-1 truncate text-xs text-ink-soft">
                 {roomTitle} · {memberCount}명
               </div>
-              <div className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums">
-                {formatAmount(totalAmount, baseCurrency)}
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-ink-soft">총</span>
+                <span className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums">
+                  {formatAmount(totalAmount, baseCurrency)}
+                </span>
               </div>
             </div>
           </div>

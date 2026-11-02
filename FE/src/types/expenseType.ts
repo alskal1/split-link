@@ -84,7 +84,9 @@ export type SettlementStatus = "RECEIVE" | "SEND" | "ZERO" | "PENDING";
  * 지출 내역 목록 표시용 항목 응답
  * @param expenseId 지출 PK
  * @param title 지출 항목명
- * @param amount 결제 금액
+ * @param amount 결제 금액 (결제 통화 기준)
+ * @param currency 결제 통화
+ * @param amountInBaseCurrency 방 기준통화 환산 금액
  * @param payerName 결제자 이름
  * @param isMyPayment 현재 접속자가 결제자인지 여부
  * @param targetMemberCount 정산 참여 인원 수
@@ -93,6 +95,8 @@ export interface ExpenseItemResponse {
   expenseId: number;
   title: string;
   amount: number;
+  currency: string;
+  amountInBaseCurrency: number;
   payerName: string;
   isMyPayment: boolean;
   targetMemberCount: number;
@@ -215,7 +219,7 @@ export interface ExpenseUpdateFormMemberInfo {
  * @param expenseId 지출 PK
  * @param title 지출 항목명
  * @param amount 결제 금액
- * @param currency 결제 통화 (수정 불가, 표시용)
+ * @param currency 결제 통화
  * @param spentAt 결제 일시 (ISO-8601)
  * @param bankName 송금받을 계좌 은행명
  * @param accountNumber 송금받을 계좌번호
@@ -241,6 +245,7 @@ export interface ExpenseUpdateFormResponse {
  * @param payerId 결제자 PK
  * @param title 지출 항목명
  * @param amount 결제 금액
+ * @param currency 결제 통화
  * @param bankName 송금받을 계좌 은행명 (결제자 본인만 변경 가능, 그 외에는 서버가 기존 값 유지)
  * @param accountNumber 송금받을 계좌번호 (결제자 본인만 변경 가능, 그 외에는 서버가 기존 값 유지)
  * @param spentAt 결제 일시 (ISO-8601, 예: 2026-09-17T00:00:00)
@@ -250,6 +255,7 @@ export interface ExpenseUpdateRequest {
   payerId: number;
   title: string;
   amount: number;
+  currency: string;
   bankName: string;
   accountNumber: string;
   spentAt: string;
