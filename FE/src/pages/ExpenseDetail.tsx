@@ -5,6 +5,7 @@ import {
   getExpenseUpdateForm,
   updateExpense,
 } from "../api/expense";
+import { AVATAR_PALETTE } from "../constants/avatar";
 import { BANK_OPTIONS } from "../constants/bank";
 import {
   formatAmountInput,
@@ -12,6 +13,7 @@ import {
   sanitizeAmountInput,
 } from "../utils/currency";
 import type { ExpenseDetailResponse } from "../types/expenseType";
+import { BASE_CURRENCY_CARDS } from "../constants/currency";
 import BottomSheet from "../components/BottomSheet";
 import ConfirmModal from "../components/ConfirmModal";
 
@@ -67,6 +69,7 @@ export default function ExpenseDetail({
   // 수정 입력값 (항목명은 모달 제목으로만 표시, 별도 수정 UI 없음)
   const [title, setTitle] = useState(expense.title);
   const [amount, setAmount] = useState(String(expense.amount));
+  const [currency, setCurrency] = useState(expense.currency || baseCurrency);
   const [spentAt, setSpentAt] = useState(expense.spentAt.slice(0, 10));
   const [payerId, setPayerId] = useState(String(expense.payerId));
   const [bankName, setBankName] = useState(expense.bankName ?? "");
@@ -105,6 +108,7 @@ export default function ExpenseDetail({
         setRoomMembers(form.roomMembers);
         setTitle(form.title);
         setAmount(String(form.amount));
+        setCurrency(form.currency || baseCurrency);
         setSpentAt(form.spentAt.slice(0, 10));
         setPayerId(String(form.payerId));
         setBankName(form.bankName ?? "");
@@ -131,7 +135,7 @@ export default function ExpenseDetail({
     return () => {
       cancelled = true;
     };
-  }, [slug, expense.expenseId, isLocked]);
+  }, [slug, expense.expenseId, isLocked, baseCurrency]);
 
   const isValid =
     title.trim().length > 0 &&
@@ -176,6 +180,7 @@ export default function ExpenseDetail({
         payerId: Number(payerId),
         title: title.trim(),
         amount: Number(amount),
+        currency,
         bankName,
         accountNumber: accountNumber.trim(),
         spentAt: `${spentAt}T00:00:00`,
@@ -259,7 +264,7 @@ export default function ExpenseDetail({
       >
         <div className="mb-4">
           <div className="mb-2 text-xs font-bold text-ink-soft">
-            금액 ({getCurrencyUnit(expense.currency || baseCurrency)})
+            금액 ({getCurrencyUnit(currency)})
           </div>
           <input
             className={`${fieldClass} text-xl font-extrabold tabular-nums`}
@@ -270,12 +275,43 @@ export default function ExpenseDetail({
           />
         </div>
 
+        <div className="mb-4">
+          <div className="mb-2 text-xs font-bold text-ink-soft">결제 통화</div>
+          <div className="relative">
+            <select
+              className={`${fieldClass} appearance-none pr-10 font-bold`}
+              value={currency}
+              disabled={isLocked}
+              onChange={(e) => setCurrency(e.target.value)}
+            >
+              {BASE_CURRENCY_CARDS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#5F5E5A"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+        </div>
+
         <div className="mb-4 grid grid-cols-2 gap-2.5">
           <div className="min-w-0">
             <div className="mb-2 text-xs font-bold text-ink-soft">결제일자</div>
             <input
               type="date"
-              className={`${fieldClass} min-w-0 appearance-none px-3`}
+              className={`${fieldClass} min-w-0 appearance-none`}
               value={spentAt}
               disabled={isLocked}
               onChange={(e) => setSpentAt(e.target.value)}
@@ -319,21 +355,36 @@ export default function ExpenseDetail({
             송금받을 계좌
           </div>
           {canEditAccount ? (
-            <div className="flex items-center gap-2">
-              <select
-                className={`${fieldClass} flex-1 font-bold`}
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-              >
-                <option value="">은행 선택</option>
-                {bankOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="relative min-w-0">
+                <select
+                  className={`${fieldClass} min-w-0 appearance-none truncate pr-10 font-bold`}
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                >
+                  <option value="">은행 선택</option>
+                  {bankOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#5F5E5A"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
               <input
-                className={`${fieldClass} flex-1`}
+                className={`${fieldClass} min-w-0`}
                 inputMode="numeric"
                 placeholder="계좌번호"
                 value={accountNumber}
@@ -343,7 +394,7 @@ export default function ExpenseDetail({
               />
             </div>
           ) : (
-            <div className="rounded-xl bg-white px-4 py-3.5 text-[15px] font-semibold">
+            <div className="w-full cursor-not-allowed rounded-xl border-[1.5px] border-line bg-white px-4 py-3.5 text-[15px] font-semibold opacity-60">
               {bankName || accountNumber
                 ? `${bankName} ${accountNumber}`.trim()
                 : "등록된 계좌가 없어요"}
@@ -353,9 +404,10 @@ export default function ExpenseDetail({
 
         <div className="mb-2">
           <div className="mb-2 text-xs font-bold text-ink-soft">참여자</div>
-          <div className="flex flex-wrap gap-1.5">
-            {roomMembers.map((member) => {
+          <div className="flex flex-wrap gap-2">
+            {roomMembers.map((member, i) => {
               const selected = targetMemberIds.includes(member.memberId);
+              const [bg, color] = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
 
               return (
                 <button
@@ -363,29 +415,17 @@ export default function ExpenseDetail({
                   type="button"
                   disabled={isLocked}
                   onClick={() => toggleParticipant(member.memberId)}
-                  className={`flex cursor-pointer items-center gap-[5px] rounded-full px-3.5 py-2 text-sm font-bold transition-colors active:scale-95 disabled:cursor-not-allowed ${
-                    selected
-                      ? "bg-ink text-white"
-                      : "bg-[#edece7] text-ink-soft"
+                  className={`flex cursor-pointer items-center gap-2 rounded-full border border-line bg-white py-[5px] pr-3 pl-[5px] transition-opacity active:scale-95 disabled:cursor-not-allowed ${
+                    selected ? "" : "opacity-45"
                   }`}
                 >
                   <span
-                    className={`flex ${selected ? "opacity-100" : "opacity-35"}`}
+                    className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-xs font-extrabold"
+                    style={{ backgroundColor: bg, color }}
                   >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    {member.name.slice(0, 1)}
                   </span>
-                  {member.name}
+                  <span className="text-sm font-semibold">{member.name}</span>
                 </button>
               );
             })}
