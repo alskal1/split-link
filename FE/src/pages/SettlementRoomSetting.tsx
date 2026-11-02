@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { AVATAR_PALETTE } from "../constants/avatar";
+import { BASE_CURRENCY_CARDS } from "../constants/currency";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 import { deleteRoom, updateRoom } from "../api/room";
@@ -57,7 +59,7 @@ export default function SettlementRoomSetting({
   title,
   members: initialMembers,
   pin: initialPin,
-  baseCurrency,
+  baseCurrency: initialBaseCurrency,
   isLocked,
   expenseCount,
   expenseMemberNames,
@@ -67,6 +69,8 @@ export default function SettlementRoomSetting({
 }: SettlementRoomSettingProps) {
   // 모임 이름
   const [roomName, setRoomName] = useState(title);
+  // 기준통화
+  const [baseCurrency, setBaseCurrency] = useState(initialBaseCurrency);
   // 입장코드
   const [pin, setPin] = useState(initialPin);
   // 참여 멤버
@@ -307,6 +311,27 @@ export default function SettlementRoomSetting({
         </div>
 
         <div className="mb-[18px]">
+          <div className={labelClass}>기준 통화</div>
+          <select
+            className={`${inputClass} font-semibold`}
+            value={baseCurrency}
+            onChange={(e) => setBaseCurrency(e.target.value)}
+            disabled={expenseCount > 0}
+          >
+            {BASE_CURRENCY_CARDS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.symbol} {c.label}
+              </option>
+            ))}
+          </select>
+          {expenseCount > 0 && (
+            <div className="mt-2 text-xs text-ink-soft">
+              결제내역이 있어 기준 통화를 변경할 수 없어요.
+            </div>
+          )}
+        </div>
+
+        <div className="mb-[18px]">
           <div className={labelClass}>입장코드</div>
           <input
             className={`${inputClass} font-mono font-extrabold tracking-[0.15em]`}
@@ -320,35 +345,44 @@ export default function SettlementRoomSetting({
         <div className="mb-[18px]">
           <div className={labelClass}>참여 멤버</div>
           {members.length > 0 && (
-            <div className="mb-2.5 flex flex-wrap gap-1.5">
-              {members.map((member) => (
-                <div
-                  key={member.key}
-                  className="flex items-center gap-1 rounded-full bg-white py-1.5 pr-1.5 pl-3.5 text-sm font-semibold"
-                >
-                  {member.name}
-                  <button
-                    type="button"
-                    className="flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-full text-ink-faint disabled:cursor-default disabled:opacity-40"
-                    disabled={isLocked}
-                    onClick={() => handleRemoveMember(member.key)}
-                    aria-label={`${member.name} 삭제`}
+            <div className="mb-2.5 flex flex-wrap gap-2">
+              {members.map((member, i) => {
+                const [bg, color] = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
+                return (
+                  <div
+                    key={member.key}
+                    className="flex animate-sl-chip items-center gap-2 rounded-full border border-line bg-white py-[5px] pr-1.5 pl-[5px]"
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
+                    <span
+                      className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-xs font-extrabold"
+                      style={{ backgroundColor: bg, color }}
                     >
-                      <path d="M18 6 6 18" />
-                      <path d="m6 6 12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
+                      {member.name.slice(0, 1)}
+                    </span>
+                    <span className="text-sm font-semibold">{member.name}</span>
+                    <button
+                      type="button"
+                      className="flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-full p-0 text-ink-faint hover:bg-[#edece7] hover:text-ink disabled:cursor-default disabled:opacity-40"
+                      disabled={isLocked}
+                      onClick={() => handleRemoveMember(member.key)}
+                      aria-label={`${member.name} 삭제`}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      >
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div className="flex gap-2">
