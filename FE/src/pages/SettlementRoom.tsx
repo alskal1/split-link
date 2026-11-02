@@ -249,58 +249,63 @@ function SettlementRoomContent({
    * 지출 목록/정산 요약 및 정산 집계용 지출 상세를 서버에서 새로 조회해 반영
    * (등록 · 수정 · 삭제 직후 항상 이 함수로 새로고침하여 로컬 상태가 서버와 어긋나지 않도록 함)
    */
-  const loadExpenses = useCallback(async (silent = false) => {
-    const summary = await getExpenseList(slug);
-    if (!summary) {
-      return;
-    }
-    setExpenseSummary(summary);
+  const loadExpenses = useCallback(
+    async (silent = false) => {
+      const summary = await getExpenseList(slug);
+      if (!summary) {
+        return;
+      }
+      setExpenseSummary(summary);
 
-    // 다른 사용자가 삭제한 항목 등 재시도 후에도 계속 실패하는 항목이 있으면(reject)
-    // 나머지 항목으로는 계속 진행하되, 정산 금액이 실제와 다를 수 있음을 사용자에게 알림
-    const results = await Promise.allSettled(
-      summary.expenses.map((item) => getExpenseDetailWithRetry(item.expenseId)),
-    );
-
-    const hasFailure = results.some((result) => result.status === "rejected");
-    // 주기적 갱신(silent) 중에는 일시적인 실패로 토스트를 반복해서 띄우지 않음
-    if (hasFailure && !silent) {
-      toast.error(
-        "일부 지출 내역을 불러오지 못했어요. 화면을 새로고침해 다시 확인해주세요",
+      // 다른 사용자가 삭제한 항목 등 재시도 후에도 계속 실패하는 항목이 있으면(reject)
+      // 나머지 항목으로는 계속 진행하되, 정산 금액이 실제와 다를 수 있음을 사용자에게 알림
+      const results = await Promise.allSettled(
+        summary.expenses.map((item) =>
+          getExpenseDetailWithRetry(item.expenseId),
+        ),
       );
-    }
 
-    const details = results
-      .filter(
-        (
-          result,
-        ): result is PromiseFulfilledResult<
-          ExpenseDetailResponse | undefined
-        > => result.status === "fulfilled",
-      )
-      .map((result) => result.value);
+      const hasFailure = results.some((result) => result.status === "rejected");
+      // 주기적 갱신(silent) 중에는 일시적인 실패로 토스트를 반복해서 띄우지 않음
+      if (hasFailure && !silent) {
+        toast.error(
+          "일부 지출 내역을 불러오지 못했어요. 화면을 새로고침해 다시 확인해주세요",
+        );
+      }
 
-    const records: ExpenseRecord[] = details
-      .filter((detail): detail is ExpenseDetailResponse => !!detail)
-      .map((detail) => ({
-        id: String(detail.expenseId),
-        name: detail.title,
-        amount: detail.amount,
-        currency: detail.currency,
-        paidAt: detail.spentAt.slice(0, 10),
-        payer: detail.payerName,
-        bankName: detail.bankName,
-        accountNumber: detail.accountNumber,
-        isMyPayment: detail.isMyPayment,
-        participantShares: detail.targetMembers.map((member) => ({
-          name: member.name,
-          shareAmount: member.shareAmount,
-          isSelf: member.isSelf,
-        })),
-      }));
+      const details = results
+        .filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<
+            ExpenseDetailResponse | undefined
+          > => result.status === "fulfilled",
+        )
+        .map((result) => result.value);
 
-    setExpenses(records);
-  }, [slug, getExpenseDetailWithRetry]);
+      const records: ExpenseRecord[] = details
+        .filter((detail): detail is ExpenseDetailResponse => !!detail)
+        .map((detail) => ({
+          id: String(detail.expenseId),
+          name: detail.title,
+          amount: detail.amount,
+          currency: detail.currency,
+          paidAt: detail.spentAt.slice(0, 10),
+          payer: detail.payerName,
+          bankName: detail.bankName,
+          accountNumber: detail.accountNumber,
+          isMyPayment: detail.isMyPayment,
+          participantShares: detail.targetMembers.map((member) => ({
+            name: member.name,
+            shareAmount: member.shareAmount,
+            isSelf: member.isSelf,
+          })),
+        }));
+
+      setExpenses(records);
+    },
+    [slug, getExpenseDetailWithRetry],
+  );
 
   /**
    * 지출 입력 폼 초기 데이터(결제자/참여자 선택용 멤버 목록 등) 새로 조회해 반영
@@ -410,7 +415,10 @@ function SettlementRoomContent({
     setGroups((prev) => {
       if (prev.length === 0) {
         return [
-          createEmptyExpenseGroup(formInit.roomMembers, formInit.defaultAccount),
+          createEmptyExpenseGroup(
+            formInit.roomMembers,
+            formInit.defaultAccount,
+          ),
         ];
       }
 
@@ -442,25 +450,12 @@ function SettlementRoomContent({
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
 
-  // 목록 항목별 결제 통화 (목록 응답에는 통화가 없어 지출 상세 기반 기록에서 조회)
-  const listCurrencyById = new Map(
-    expenses.map((expense) => [Number(expense.id), expense.currency]),
-  );
-
-  // 정산 전에는 결제한 통화 그대로 표시 (통화가 섞이면 통화별로 합산)
+  // 정산 전 예상 금액은 방 기준통화로 환산된 금액으로 합산
   const settleKey = (name: string, currency: string) => `${name}|${currency}`;
-
-  // 통화별 총 지출 합계
-  const totalByCurrency = new Map<string, number>();
-  expenses.forEach((expense) => {
-    totalByCurrency.set(
-      expense.currency,
-      (totalByCurrency.get(expense.currency) ?? 0) + expense.amount,
-    );
-  });
 
   // 상대·통화별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
   // 서버 정산 전 예상 금액이며, 지출의 결제자-참여자 관계를 상대별로 상계해 구함
+  // (참여자별 부담금은 서버가 방 기준통화로 환산해 저장하므로 기준통화로 합산)
   const balanceByMember = new Map<string, number>();
   const addBalance = (name: string, currency: string, amount: number) => {
     const key = settleKey(name, currency);
@@ -472,7 +467,7 @@ function SettlementRoomContent({
       expense.participantShares
         .filter((share) => !share.isSelf)
         .forEach((share) =>
-          addBalance(share.name, expense.currency, -share.shareAmount),
+          addBalance(share.name, baseCurrency, -share.shareAmount),
         );
       return;
     }
@@ -480,7 +475,7 @@ function SettlementRoomContent({
     // 다른 사람이 결제한 지출: 내 부담금은 결제자에게 보낼 금액
     const myShare = expense.participantShares.find((share) => share.isSelf);
     if (myShare) {
-      addBalance(expense.payer, expense.currency, myShare.shareAmount);
+      addBalance(expense.payer, baseCurrency, myShare.shareAmount);
     }
   });
 
@@ -488,7 +483,9 @@ function SettlementRoomContent({
   const estimatedReceiveByCurrency = new Map<string, number>();
   balanceByMember.forEach((balance, key) => {
     const currency = key.slice(key.lastIndexOf("|") + 1);
-    const rounded = Math.round(balance);
+    // 부담금은 방 기준통화 금액이므로 기준통화 소수 자릿수(KRW·JPY 0자리, 그 외 2자리)로 반올림
+    const scale = ["KRW", "JPY"].includes(currency.toUpperCase()) ? 0 : 2;
+    const rounded = Number(balance.toFixed(scale));
     const target =
       rounded > 0 ? estimatedSendByCurrency : estimatedReceiveByCurrency;
     if (rounded !== 0) {
@@ -507,7 +504,7 @@ function SettlementRoomContent({
     return parts.length > 0 ? parts.join(" + ") : formatAmount(0, baseCurrency);
   };
 
-  // 정산 계산하기 실행 전후로 요약 카드 금액이 바뀌지 않도록 항상 결제 통화 기준 예상 금액을 사용
+  // 정산 계산하기 실행 전후로 요약 카드 금액이 바뀌지 않도록 항상 기준통화 환산 예상 금액을 사용
   const mySendAmount = Array.from(estimatedSendByCurrency.values()).reduce(
     (a, b) => a + b,
     0,
@@ -516,11 +513,8 @@ function SettlementRoomContent({
     estimatedReceiveByCurrency.values(),
   ).reduce((a, b) => a + b, 0);
 
-  // 표시용 문자열 (결제 통화 기준)
-  const totalText =
-    totalByCurrency.size === 0
-      ? formatAmount(totalAmount, baseCurrency)
-      : formatByCurrency(totalByCurrency);
+  // 표시용 문자열 (방 기준통화 환산 기준)
+  const totalText = formatAmount(totalAmount, baseCurrency);
   const receiveText = formatByCurrency(estimatedReceiveByCurrency);
   const sendText = formatByCurrency(estimatedSendByCurrency);
 
@@ -976,9 +970,11 @@ function SettlementRoomContent({
                     </div>
                   </div>
                   <div className="text-[15px] font-extrabold whitespace-nowrap tabular-nums">
-                    {formatAmount(
-                      expense.amount,
-                      listCurrencyById.get(expense.expenseId) ?? baseCurrency,
+                    {formatAmount(expense.amountInBaseCurrency, baseCurrency)}
+                    {expense.currency !== baseCurrency && (
+                      <div className="mt-0.5 text-right text-[11px] font-semibold text-ink-soft">
+                        {formatAmount(expense.amount, expense.currency)}
+                      </div>
                     )}
                   </div>
                 </button>
