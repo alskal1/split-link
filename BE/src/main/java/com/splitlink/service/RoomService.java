@@ -133,7 +133,7 @@ public class RoomService {
         if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
             String trimmedNewPin = request.getNewPin().trim();
             if (!trimmedNewPin.matches(PIN_REGEX)) {
-                throw new IllegalArgumentException("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
+                throw new IllegalArgumentException("입장코드는 영문 대소문자 또는 숫자 조합으로 4~10자리여야 합니다.");
             }
             targetPin = trimmedNewPin;
         }

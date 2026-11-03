@@ -584,7 +584,7 @@ public class RoomServiceTest {
         }
 
         @Test
-        @DisplayName("예외: 새 PIN 번호가 규격(영대소문자/숫자 4~10자리)에 맞지 않으면 예외가 발생한다.")
+        @DisplayName("예외: 새 PIN 번호가 규격(영문 대소문자 또는 숫자 4~10자리)에 맞지 않으면 예외가 발생한다.")
         void updateRoomThrowExceptionWhenInvalidNewPin() {
             // given
             RoomCreateRequest createRequest = RoomCreateRequest.builder()
@@ -611,7 +611,7 @@ public class RoomServiceTest {
             // when & then
             assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), invalidNewPinRequest))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
+                    .hasMessage("입장코드는 영문 대소문자 또는 숫자 조합으로 4~10자리여야 합니다.");
         }
     }
 
