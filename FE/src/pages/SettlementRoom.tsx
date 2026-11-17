@@ -450,73 +450,35 @@ function SettlementRoomContent({
 
   const totalAmount = expenseSummary?.totalExpenseAmount ?? 0;
 
-  // 정산 전 예상 금액은 방 기준통화로 환산된 금액으로 합산
-  const settleKey = (name: string, currency: string) => `${name}|${currency}`;
-
-  // 상대·통화별 정산 합계 (양수: 상대에게 보낼 금액, 음수: 상대에게서 받을 금액)
-  // 서버 정산 전 예상 금액이며, 지출의 결제자-참여자 관계를 상대별로 상계해 구함
-  // (참여자별 부담금은 서버가 방 기준통화로 환산해 저장하므로 기준통화로 합산)
-  const balanceByMember = new Map<string, number>();
-  const addBalance = (name: string, currency: string, amount: number) => {
-    const key = settleKey(name, currency);
-    balanceByMember.set(key, (balanceByMember.get(key) ?? 0) + amount);
-  };
+  // 정산 전 예상 금액: 서버 정산 계산과 동일하게 내 전체 순잔액(결제한 금액 - 부담할 금액)으로 산출
+  // 양수면 받을 금액, 음수면 보낼 금액이며 모두 방 기준통화 기준
+  const paidBaseByExpenseId = new Map<string, number>(
+    (expenseSummary?.expenses ?? []).map((item) => [
+      String(item.expenseId),
+      item.amountInBaseCurrency,
+    ]),
+  );
+  let myNetBalance = 0;
   expenses.forEach((expense) => {
     if (expense.isMyPayment) {
-      // 내가 결제한 지출: 다른 참여자의 부담금은 내가 받을 금액
-      expense.participantShares
-        .filter((share) => !share.isSelf)
-        .forEach((share) =>
-          addBalance(share.name, baseCurrency, -share.shareAmount),
-        );
-      return;
+      myNetBalance += paidBaseByExpenseId.get(expense.id) ?? 0;
     }
-
-    // 다른 사람이 결제한 지출: 내 부담금은 결제자에게 보낼 금액
     const myShare = expense.participantShares.find((share) => share.isSelf);
     if (myShare) {
-      addBalance(expense.payer, baseCurrency, myShare.shareAmount);
+      myNetBalance -= myShare.shareAmount;
     }
   });
 
-  const estimatedSendByCurrency = new Map<string, number>();
-  const estimatedReceiveByCurrency = new Map<string, number>();
-  balanceByMember.forEach((balance, key) => {
-    const currency = key.slice(key.lastIndexOf("|") + 1);
-    // 부담금은 방 기준통화 금액이므로 기준통화 소수 자릿수(KRW·JPY 0자리, 그 외 2자리)로 반올림
-    const scale = ["KRW", "JPY"].includes(currency.toUpperCase()) ? 0 : 2;
-    const rounded = Number(balance.toFixed(scale));
-    const target =
-      rounded > 0 ? estimatedSendByCurrency : estimatedReceiveByCurrency;
-    if (rounded !== 0) {
-      target.set(currency, (target.get(currency) ?? 0) + Math.abs(rounded));
-    }
-  });
-
-  /**
-   * 통화별 금액을 "100 USD + 50,000원" 형태로 변환 (금액이 없으면 기준통화 0)
-   * @param amountByCurrency 통화별 금액
-   */
-  const formatByCurrency = (amountByCurrency: Map<string, number>): string => {
-    const parts = Array.from(amountByCurrency.entries()).map(
-      ([currency, amount]) => formatAmount(amount, currency),
-    );
-    return parts.length > 0 ? parts.join(" + ") : formatAmount(0, baseCurrency);
-  };
-
-  // 정산 계산하기 실행 전후로 요약 카드 금액이 바뀌지 않도록 항상 기준통화 환산 예상 금액을 사용
-  const mySendAmount = Array.from(estimatedSendByCurrency.values()).reduce(
-    (a, b) => a + b,
-    0,
-  );
-  const myReceiveAmount = Array.from(
-    estimatedReceiveByCurrency.values(),
-  ).reduce((a, b) => a + b, 0);
+  // 기준통화 소수 자릿수(KRW·JPY 0자리, 그 외 2자리)로 반올림
+  const baseScale = ["KRW", "JPY"].includes(baseCurrency.toUpperCase()) ? 0 : 2;
+  const roundedNet = Number(myNetBalance.toFixed(baseScale));
+  const myReceiveAmount = roundedNet > 0 ? roundedNet : 0;
+  const mySendAmount = roundedNet < 0 ? -roundedNet : 0;
 
   // 표시용 문자열 (방 기준통화 환산 기준)
   const totalText = formatAmount(totalAmount, baseCurrency);
-  const receiveText = formatByCurrency(estimatedReceiveByCurrency);
-  const sendText = formatByCurrency(estimatedSendByCurrency);
+  const receiveText = formatAmount(myReceiveAmount, baseCurrency);
+  const sendText = formatAmount(mySendAmount, baseCurrency);
 
   /**
    * 그룹 값 변경
