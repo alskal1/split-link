@@ -38,6 +38,7 @@ public interface RoomMapper {
 
     /** slug, 입장코드(PIN) 검사 후 방 PK 조회 */
     Long findRoomIdBySlugAndPin(@Param("slug") String slug,
+                                 @Param("memberId") Long memberId,
                                  @Param("pin") String pin);
 
     /** slug, memberId 기준 방 존재 여부 및 접근 권한 검증 후 Room 엔티티 조회 */

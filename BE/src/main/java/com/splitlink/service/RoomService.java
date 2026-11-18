@@ -118,12 +118,12 @@ public class RoomService {
      * (제목, 기준통화, 입장코드, 멤버)
      */
     @Transactional
-    public RoomDetailResponse updateRoom(String slug, RoomUpdateRequest request) {
+    public RoomDetailResponse updateRoom(String slug, Long memberId, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
         // 입장코드 및 입력값 유효성 검사
         String sanitizedPin = request.getPin().trim();
-        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, sanitizedPin);
+        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
 
         // 지출 등록/수정/삭제 요청과의 경쟁 조건(Race Condition)을 방지
         roomMapper.findRoomByIdForUpdate(roomId);
@@ -193,11 +193,11 @@ public class RoomService {
      * 방 및 관련 데이터를 일괄 삭제
      */
     @Transactional
-    public void deleteRoom(String slug, RoomAccessRequest request) {
+    public void deleteRoom(String slug, Long memberId, RoomAccessRequest request) {
         log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
         // 방 존재 & PIN 일치 검증 후 roomId 획득
-        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, request.getPin());
+        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, request.getPin());
 
         // 방의 지출 건수 및 정산 마감 여부 조회
         int expenseCount = expenseMapper.countExpensesByRoomId(roomId);

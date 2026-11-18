@@ -68,10 +68,12 @@
 
     <!-- slug와 입장코드(PIN) 일치 여부 검증 후 roomId 조회 -->
     <select id="findRoomIdBySlugAndPin" resultType="java.lang.Long">
-        SELECT room_id
-        FROM rooms
-        WHERE slug = #{slug}
-          AND pin = #{pin}
+        SELECT r.room_id
+        FROM rooms r
+        INNER JOIN members m ON r.room_id = m.room_id
+        WHERE r.slug = #{slug}
+          AND r.pin = #{pin}
+          AND m.member_id = #{memberId}
     </select>
 
     <!-- [메인 정산 페이지용] 방 전체 상세 정보 및 멤버 목록 조회 -->
