@@ -145,11 +145,23 @@ public class RoomService {
         // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 조회
         List<MemberUsageDto> currentMembers = memberMapper.findMemberUsageStatusesByRoomId(roomId);
 
+        // 현재 방에 실제로 속해 있는 memberId 집합 추출
+        Set<Long> currentMemberIds = currentMembers.stream()
+                .map(MemberUsageDto::getMemberId)
+                .collect(Collectors.toSet());
+
         // 이번 요청에서 넘어온 기존 멤버 ID 목록 (memberId != null)
         Set<Long> requestMemberIds = memberRequests.stream()
                 .map(RoomUpdateRequest.MemberRequest::getMemberId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+
+        // memberId가 있는 경우, 해당 ID가 모두 현재 방에 속한 멤버인지 확인 (memberId == null인 신규 멤버는 통과)
+        for (Long reqMemberId : requestMemberIds) {
+            if (!currentMemberIds.contains(reqMemberId)) {
+                throw new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다.");
+            }
+        }
 
         // 삭제 대상 검증 및 추출 (기존 DB에는 있었으나, 요청 목록에서 빠진 memberId)
         List<Long> memberIdsToDelete = new ArrayList<>();
@@ -197,7 +209,11 @@ public class RoomService {
         log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
         // 방 존재 & PIN 일치 검증 후 roomId 획득
-        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, request.getPin());
+        String sanitizedPin = request.getPin().trim();
+        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
+
+        // 삭제 전 지출 등록/수정 요청과의 경쟁 조건(Race Condition) 방지용 비관적 락 적용
+        roomMapper.findRoomByIdForUpdate(roomId);
 
         // 방의 지출 건수 및 정산 마감 여부 조회
         int expenseCount = expenseMapper.countExpensesByRoomId(roomId);
