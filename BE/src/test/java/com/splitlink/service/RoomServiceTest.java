@@ -179,7 +179,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), updateRequest);
+            RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), jiyongMemberId, updateRequest);
 
             // then
             assertThat(response).isNotNull();
@@ -213,7 +213,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, jiyongId, updateRequest);
 
             // then
             assertThat(updatedDetail.getMembers()).hasSize(1);
@@ -244,7 +244,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, originalJiyongId, updateRequest);
 
             // then
             Long updatedJiyongId = updatedDetail.getMembers().get(0).getMemberId();
@@ -278,7 +278,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, jiyongId, updateRequest);
 
             // then
             assertThat(updatedDetail.getMembers()).hasSize(2);
@@ -312,7 +312,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedDetail = roomService.updateRoom(slug, jiyongId, updateRequest);
 
             // then
             assertThat(updatedDetail.getMembers()).hasSize(2);
@@ -344,7 +344,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse updatedResponse = roomService.updateRoom(slug, updateRequest);
+            RoomDetailResponse updatedResponse = roomService.updateRoom(slug, jiyongId, updateRequest);
 
             // then
             assertThat(updatedResponse).isNotNull();
@@ -388,7 +388,7 @@ public class RoomServiceTest {
                     .build();
 
             // when
-            RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), updateRequestWithoutNewPin);
+            RoomDetailResponse response = roomService.updateRoom(createResponse.getSlug(), jiyongId, updateRequestWithoutNewPin);
 
             // then
             assertThat(response).isNotNull();
@@ -444,7 +444,7 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.updateRoom(slug, invalidUpdateRequest))
+            assertThatThrownBy(() -> roomService.updateRoom(slug, taeyangId, invalidUpdateRequest))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage(String.format("'%s'님은 지출 내역(결제 또는 참여)이 존재하여 삭제할 수 없습니다.", roomDetail.getMembers().get(0).getName()));
         }
@@ -497,7 +497,7 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.updateRoom(slug, invalidUpdateRequest))
+            assertThatThrownBy(() -> roomService.updateRoom(slug, jiyongId, invalidUpdateRequest))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("지출 내역(결제 또는 참여)이 존재하여 삭제할 수 없습니다.");
         }
@@ -517,9 +517,86 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.updateRoom(invalidSlug, updateRequest))
+            assertThatThrownBy(() -> roomService.updateRoom(invalidSlug, 1L, updateRequest))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 해당 방에 속하지 않은 사용자(memberId)가 방 수정을 요청하면 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenMemberNotInRoom() {
+            // given
+            RoomCreateResponse roomA = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 A")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용"))
+                    .build());
+
+            RoomCreateResponse roomB = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 B")
+                    .baseCurrency("KRW")
+                    .pin("5678")
+                    .memberNames(List.of("외부인"))
+                    .build());
+
+            RoomDetailResponse detailA = roomService.accessRoom(roomA.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            RoomDetailResponse detailB = roomService.accessRoom(roomB.getSlug(), RoomAccessRequest.builder().pin("5678").build());
+
+            Long jiyongId = detailA.getMembers().get(0).getMemberId();
+            Long outsiderId = detailB.getMembers().get(0).getMemberId();
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("해킹 시도")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .members(List.of(RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("지용").build()))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(roomA.getSlug(), outsiderId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 요청 멤버 목록에 다른 방에 속한 memberId가 포함되어 있으면 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenTargetMemberNotInRoom() {
+            // given
+            RoomCreateResponse roomA = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 A")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용"))
+                    .build());
+
+            RoomCreateResponse roomB = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 B")
+                    .baseCurrency("KRW")
+                    .pin("5678")
+                    .memberNames(List.of("다른방멤버"))
+                    .build());
+
+            RoomDetailResponse detailA = roomService.accessRoom(roomA.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            RoomDetailResponse detailB = roomService.accessRoom(roomB.getSlug(), RoomAccessRequest.builder().pin("5678").build());
+
+            Long jiyongId = detailA.getMembers().get(0).getMemberId();
+            Long otherRoomMemberId = detailB.getMembers().get(0).getMemberId();
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("방 A 수정")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .members(List.of(
+                            RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("지용").build(),
+                            RoomUpdateRequest.MemberRequest.builder().memberId(otherRoomMemberId).name("다른방멤버").build()
+                    ))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(roomA.getSlug(), jiyongId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방에 속하지 않은 멤버입니다.");
         }
 
         @Test
@@ -550,7 +627,7 @@ public class RoomServiceTest {
 
             // when & then
             assertThrows(IllegalArgumentException.class,
-                    () -> roomService.updateRoom(createResponse.getSlug(), invalidUpdateRequest));
+                    () -> roomService.updateRoom(createResponse.getSlug(), jiyongId, invalidUpdateRequest));
         }
 
         @Test
@@ -578,9 +655,9 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), wrongPinRequest))
+            assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), jiyongId, wrongPinRequest))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
         }
 
         @Test
@@ -609,7 +686,7 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), invalidNewPinRequest))
+            assertThatThrownBy(() -> roomService.updateRoom(createResponse.getSlug(), jiyongId, invalidNewPinRequest))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("입장코드는 영문 대소문자 또는 숫자 조합으로 4~10자리여야 합니다.");
         }
@@ -632,12 +709,15 @@ public class RoomServiceTest {
             RoomCreateResponse createResponse = roomService.createRoom(createRequest);
             String slug = createResponse.getSlug();
 
+            RoomDetailResponse roomDetail = roomService.accessRoom(slug, RoomAccessRequest.builder().pin("1234").build());
+            Long memberId = roomDetail.getMembers().get(0).getMemberId();
+
             RoomAccessRequest accessRequest = RoomAccessRequest.builder()
                     .pin("1234")
                     .build();
 
             // when & then
-            assertThatCode(() -> roomService.deleteRoom(slug, accessRequest))
+            assertThatCode(() -> roomService.deleteRoom(slug, memberId, accessRequest))
                     .doesNotThrowAnyException();
 
             assertThatThrownBy(() -> roomService.getRoomSummary(slug))
@@ -655,9 +735,40 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+            assertThatThrownBy(() -> roomService.deleteRoom(slug, 1L, accessRequest))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 해당 방에 속하지 않은 사용자(memberId)가 방 삭제를 요청하면 예외가 발생한다.")
+        void deleteRoomThrowExceptionWhenMemberNotInRoom() {
+            // given
+            RoomCreateResponse roomA = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 A")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("A"))
+                    .build());
+
+            RoomCreateResponse roomB = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("방 B")
+                    .baseCurrency("KRW")
+                    .pin("5678")
+                    .memberNames(List.of("외부인"))
+                    .build());
+
+            RoomDetailResponse detailB = roomService.accessRoom(roomB.getSlug(), RoomAccessRequest.builder().pin("5678").build());
+            Long outsiderId = detailB.getMembers().get(0).getMemberId();
+
+            RoomAccessRequest accessRequest = RoomAccessRequest.builder()
+                    .pin("1234")
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.deleteRoom(roomA.getSlug(), outsiderId, accessRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
         }
 
         @Test
@@ -673,14 +784,17 @@ public class RoomServiceTest {
             RoomCreateResponse createResponse = roomService.createRoom(createRequest);
             String slug = createResponse.getSlug();
 
+            RoomDetailResponse roomDetail = roomService.accessRoom(slug, RoomAccessRequest.builder().pin("1234").build());
+            Long memberId = roomDetail.getMembers().get(0).getMemberId();
+
             RoomAccessRequest accessRequest = RoomAccessRequest.builder()
                     .pin("wrongpin")
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+            assertThatThrownBy(() -> roomService.deleteRoom(slug, memberId, accessRequest))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("해당 방이 존재하지 않거나 입장코드가 일치하지 않습니다.");
+                    .hasMessage("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
         }
 
         @Test
@@ -719,7 +833,7 @@ public class RoomServiceTest {
                     .build();
 
             // when & then
-            assertThatThrownBy(() -> roomService.deleteRoom(slug, accessRequest))
+            assertThatThrownBy(() -> roomService.deleteRoom(slug, payerId, accessRequest))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.");
         }
