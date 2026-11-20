@@ -145,21 +145,26 @@ public class RoomService {
         // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 조회
         List<MemberUsageDto> currentMembers = memberMapper.findMemberUsageStatusesByRoomId(roomId);
 
-        // 현재 방에 실제로 속해 있는 memberId 집합 추출
-        Set<Long> currentMemberIds = currentMembers.stream()
-                .map(MemberUsageDto::getMemberId)
-                .collect(Collectors.toSet());
+        // 현재 방에 실제로 속해 있는 memberId -> memberName 매핑
+        Map<Long, String> currentMemberMap = currentMembers.stream()
+                .collect(Collectors.toMap(MemberUsageDto::getMemberId, MemberUsageDto::getMemberName));
 
         // 이번 요청에서 넘어온 기존 멤버 ID 목록 (memberId != null)
-        Set<Long> requestMemberIds = memberRequests.stream()
-                .map(RoomUpdateRequest.MemberRequest::getMemberId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        Set<Long> requestMemberIds = new HashSet<>();
 
-        // memberId가 있는 경우, 해당 ID가 모두 현재 방에 속한 멤버인지 확인 (memberId == null인 신규 멤버는 통과)
-        for (Long reqMemberId : requestMemberIds) {
-            if (!currentMemberIds.contains(reqMemberId)) {
-                throw new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다.");
+        // memberId가 있는 경우: 1) 중복 ID 차단, 2) 현재 방 소속 검증, 3) 기존 이름 변조 차단
+        for (RoomUpdateRequest.MemberRequest req : memberRequests) {
+            if (req.getMemberId() != null) {
+                if (!requestMemberIds.add(req.getMemberId())) {
+                    throw new IllegalArgumentException("중복된 멤버 ID가 포함되어 있습니다.");
+                }
+                String existingName = currentMemberMap.get(req.getMemberId());
+                if (existingName == null) {
+                    throw new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다.");
+                }
+                if (!existingName.equals(req.getName())) {
+                    throw new IllegalArgumentException("기존 멤버의 이름은 변경할 수 없습니다.");
+                }
             }
         }
 

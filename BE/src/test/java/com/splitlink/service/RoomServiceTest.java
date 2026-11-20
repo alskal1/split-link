@@ -690,6 +690,65 @@ public class RoomServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("입장코드는 영문 대소문자 또는 숫자 조합으로 4~10자리여야 합니다.");
         }
+
+        @Test
+        @DisplayName("예외: 요청 멤버 목록에 중복된 memberId가 포함되어 있으면 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenDuplicateMemberId() {
+            // given
+            RoomCreateResponse room = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("테스트방")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용", "태양"))
+                    .build());
+
+            RoomDetailResponse detail = roomService.accessRoom(room.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            Long jiyongId = detail.getMembers().get(0).getMemberId();
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("수정된 방제목")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .members(List.of(
+                            RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("지용").build(),
+                            RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("새멤버").build()
+                    ))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(room.getSlug(), jiyongId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("중복된 멤버 ID가 포함되어 있습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 기존 멤버의 memberId로 다른 이름을 전달하면 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenMemberNameChanged() {
+            // given
+            RoomCreateResponse room = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("테스트방")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용", "태양"))
+                    .build());
+
+            RoomDetailResponse detail = roomService.accessRoom(room.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            Long jiyongId = detail.getMembers().get(0).getMemberId();
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("수정된 방제목")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .members(List.of(
+                            RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("변경된이름").build()
+                    ))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(room.getSlug(), jiyongId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("기존 멤버의 이름은 변경할 수 없습니다.");
+        }
     }
 
     @Nested
