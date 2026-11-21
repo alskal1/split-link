@@ -52,6 +52,11 @@ public class SettlementService {
             throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방입니다.");
         }
 
+        // 등록된 지출 내역이 0건인 경우 정산 실행 차단
+        if (expenseMapper.countExpensesByRoomId(room.getRoomId()) == 0) {
+            throw new IllegalArgumentException("정산할 지출 내역이 존재하지 않습니다.");
+        }
+
         // 지출 입력 잠금 상태(is_locked = true)로 원자적 업데이트
         int updatedRows = roomMapper.updateRoomLockStatus(room.getRoomId(), true);
         if (updatedRows != 1) {
