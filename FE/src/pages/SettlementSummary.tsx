@@ -121,7 +121,6 @@ export default function SettlementSummary({
     doneDebtsCount === sendList.length;
 
   const receiveTotal = receiveList.reduce((sum, item) => sum + item.amount, 0);
-  const sendTotal = sendList.reduce((sum, item) => sum + item.amount, 0);
   const receivedTotal = receiveList
     .filter((item) => item.isDone)
     .reduce((sum, item) => sum + item.amount, 0);
