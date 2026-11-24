@@ -59,6 +59,7 @@ public class JwtProvider {
         return getClaims(token).get("memberId", Long.class);
     }
 
+    // TODO: 안쓰는지 확인 후 미사용 시 제거할 것
     public Long getRoomId(String token) {
         return getClaims(token).get("roomId", Long.class);
     }

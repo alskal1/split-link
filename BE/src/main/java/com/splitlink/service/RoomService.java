@@ -118,22 +118,25 @@ public class RoomService {
      * (제목, 기준통화, 입장코드, 멤버)
      */
     @Transactional
-    public RoomDetailResponse updateRoom(String slug, RoomUpdateRequest request) {
+    public RoomDetailResponse updateRoom(String slug, Long memberId, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
         // 입장코드 및 입력값 유효성 검사
         String sanitizedPin = request.getPin().trim();
-        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, sanitizedPin);
+        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
 
         // 지출 등록/수정/삭제 요청과의 경쟁 조건(Race Condition)을 방지
-        roomMapper.findRoomByIdForUpdate(roomId);
+        Room lockedRoom = roomMapper.findRoomByIdForUpdate(roomId);
+        if (lockedRoom.isLocked() || lockedRoom.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
+        }
 
         // newPin 변경 요청이 있는 경우에만 유효성 검사 및 targetPin 변경
         String targetPin = sanitizedPin;
         if (request.getNewPin() != null && !request.getNewPin().trim().isEmpty()) {
             String trimmedNewPin = request.getNewPin().trim();
             if (!trimmedNewPin.matches(PIN_REGEX)) {
-                throw new IllegalArgumentException("입장코드는 영대소문자와 숫자 조합으로 4~10자리여야 합니다.");
+                throw new IllegalArgumentException("입장코드는 영문 대소문자 또는 숫자 조합으로 4~10자리여야 합니다.");
             }
             targetPin = trimmedNewPin;
         }
@@ -145,11 +148,28 @@ public class RoomService {
         // 현재 방 멤버 데이터 및 지출 연관 여부(hasExpenses) 조회
         List<MemberUsageDto> currentMembers = memberMapper.findMemberUsageStatusesByRoomId(roomId);
 
+        // 현재 방에 실제로 속해 있는 memberId -> memberName 매핑
+        Map<Long, String> currentMemberMap = currentMembers.stream()
+                .collect(Collectors.toMap(MemberUsageDto::getMemberId, MemberUsageDto::getMemberName));
+
         // 이번 요청에서 넘어온 기존 멤버 ID 목록 (memberId != null)
-        Set<Long> requestMemberIds = memberRequests.stream()
-                .map(RoomUpdateRequest.MemberRequest::getMemberId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        Set<Long> requestMemberIds = new HashSet<>();
+
+        // memberId가 있는 경우: 1) 중복 ID 차단, 2) 현재 방 소속 검증, 3) 기존 이름 변조 차단
+        for (RoomUpdateRequest.MemberRequest req : memberRequests) {
+            if (req.getMemberId() != null) {
+                if (!requestMemberIds.add(req.getMemberId())) {
+                    throw new IllegalArgumentException("중복된 멤버 ID가 포함되어 있습니다.");
+                }
+                String existingName = currentMemberMap.get(req.getMemberId());
+                if (existingName == null) {
+                    throw new IllegalArgumentException("해당 방에 속하지 않은 멤버입니다.");
+                }
+                if (!existingName.equals(req.getName())) {
+                    throw new IllegalArgumentException("기존 멤버의 이름은 변경할 수 없습니다.");
+                }
+            }
+        }
 
         // 삭제 대상 검증 및 추출 (기존 DB에는 있었으나, 요청 목록에서 빠진 memberId)
         List<Long> memberIdsToDelete = new ArrayList<>();
@@ -193,11 +213,15 @@ public class RoomService {
      * 방 및 관련 데이터를 일괄 삭제
      */
     @Transactional
-    public void deleteRoom(String slug, RoomAccessRequest request) {
+    public void deleteRoom(String slug, Long memberId, RoomAccessRequest request) {
         log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
         // 방 존재 & PIN 일치 검증 후 roomId 획득
-        Long roomId = roomAccessValidator.validatePinAndGetRoomId(slug, request.getPin());
+        String sanitizedPin = request.getPin().trim();
+        Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
+
+        // 삭제 전 지출 등록/수정 요청과의 경쟁 조건(Race Condition) 방지용 비관적 락 적용
+        roomMapper.findRoomByIdForUpdate(roomId);
 
         // 방의 지출 건수 및 정산 마감 여부 조회
         int expenseCount = expenseMapper.countExpensesByRoomId(roomId);

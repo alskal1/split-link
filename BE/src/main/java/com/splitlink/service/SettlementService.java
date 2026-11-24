@@ -46,10 +46,18 @@ public class SettlementService {
     @Transactional
     public void executeSettlement(String slug, Long memberId) {
 
-        // 방 접근 권한 및 상태 1차 검증 (안내 문구용)
+        // 방 접근 권한 및 방 조회
         Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
-        if (room.isLocked() || room.isClosed()) {
+
+        // 방 행에 배타적 락(FOR UPDATE) 획득 후 최신 상태 재조회
+        Room lockedRoom = roomMapper.findRoomByIdForUpdate(room.getRoomId());
+        if (lockedRoom.isLocked() || lockedRoom.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방입니다.");
+        }
+
+        // 락이 보장된 상태에서 지출 내역 0건 여부 검증
+        if (expenseMapper.countExpensesByRoomId(room.getRoomId()) == 0) {
+            throw new IllegalArgumentException("정산할 지출 내역이 존재하지 않습니다.");
         }
 
         // 지출 입력 잠금 상태(is_locked = true)로 원자적 업데이트

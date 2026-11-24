@@ -8,6 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 
@@ -72,7 +73,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 서서 내부 예기치 못한 최상위 예외 처리 (HTTP 500 Internal Server Error)
+     * 요청 파라미터(@PathVariable, @RequestParam 등) 타입 불일치 예외 처리 (HTTP 400 Bad Request)
+     *
+     * @param e MethodArgumentTypeMismatchException 객체
+     * @return 400 상태 코드와 에러 메시지를 담은 ApiResponse
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        log.warn("Method Argument Type Mismatch Exception: parameter='{}', value='{}'", e.getName(), e.getValue());
+
+        ApiResponse<Void> response = ApiResponse.error(
+                HttpStatus.BAD_REQUEST.value(),
+                "요청 파라미터 형식이 올바르지 않습니다."
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 서버 내부 예기치 못한 최상위 예외 처리 (HTTP 500 Internal Server Error)
      *
      * @param e Exception 객체
      * @return 500 상태 코드와 공통 에러 메시지를 담은 ApiResponse

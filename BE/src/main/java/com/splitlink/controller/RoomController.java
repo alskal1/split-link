@@ -1,5 +1,6 @@
 package com.splitlink.controller;
 
+import com.splitlink.common.annotation.AuthMember;
 import com.splitlink.common.api.ApiResponse;
 import com.splitlink.dto.request.RoomAccessRequest;
 import com.splitlink.dto.request.RoomCreateRequest;
@@ -72,10 +73,11 @@ public class RoomController {
     @PutMapping("/{slug}")
     public ResponseEntity<ApiResponse<RoomDetailResponse>> updateRoom(
             @PathVariable String slug,
+            @AuthMember Long memberId,
             @Valid @RequestBody RoomUpdateRequest request) {
         log.info("RoomController:updateRoom 진입 - slug: {}", slug);
 
-        RoomDetailResponse response = roomService.updateRoom(slug, request);
+        RoomDetailResponse response = roomService.updateRoom(slug, memberId, request);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -87,10 +89,11 @@ public class RoomController {
     @DeleteMapping("/{slug}")
     public ResponseEntity<ApiResponse<Void>> deleteRoom(
             @PathVariable String slug,
+            @AuthMember Long memberId,
             @Valid @RequestBody RoomAccessRequest request) {
         log.info("RoomController:deleteRoom 진입 - slug: {}", slug);
 
-        roomService.deleteRoom(slug, request);
+        roomService.deleteRoom(slug, memberId, request);
 
         return ResponseEntity.ok(ApiResponse.success(null));
     }
