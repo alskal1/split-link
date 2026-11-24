@@ -8,6 +8,7 @@ import com.splitlink.dto.response.RoomDetailResponse;
 import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.entity.Expense;
 import com.splitlink.mapper.ExpenseMapper;
+import com.splitlink.mapper.RoomMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ public class RoomServiceTest {
 
     @Autowired
     private ExpenseMapper expenseMapper;
+
+    @Autowired
+    private RoomMapper roomMapper;
 
     @Nested
     @DisplayName("방 생성 (createRoom)")
@@ -748,6 +752,37 @@ public class RoomServiceTest {
             assertThatThrownBy(() -> roomService.updateRoom(room.getSlug(), jiyongId, updateRequest))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("기존 멤버의 이름은 변경할 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("예외: 이미 정산이 실행된(isLocked=true) 방은 수정 요청 시 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenRoomIsLocked() {
+            // given
+            RoomCreateResponse room = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("잠금 테스트방")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용", "태양"))
+                    .build());
+
+            RoomDetailResponse detail = roomService.accessRoom(room.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            Long roomId = detail.getRoomId();
+            Long jiyongId = detail.getMembers().get(0).getMemberId();
+
+            // DB에서 방 상태를 정산 잠금(is_locked = true)으로 변경
+            roomMapper.updateRoomLockStatus(roomId, true);
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("수정 시도")
+                    .baseCurrency("USD")
+                    .pin("1234")
+                    .members(List.of(RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("지용").build()))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(room.getSlug(), jiyongId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
         }
     }
 

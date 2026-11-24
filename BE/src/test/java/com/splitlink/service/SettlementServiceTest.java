@@ -73,6 +73,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(3);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(1);
 
@@ -88,6 +89,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(expenseMapper).countExpensesByRoomId(roomId);
             verify(roomMapper).updateRoomLockStatus(roomId, true);
             verify(expenseMapper).findNetBalancesByRoomId(roomId);
@@ -112,6 +114,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(1);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(1);
             given(expenseMapper.findNetBalancesByRoomId(roomId)).willReturn(Collections.emptyList());
@@ -121,6 +124,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(expenseMapper).countExpensesByRoomId(roomId);
             verify(roomMapper).updateRoomLockStatus(roomId, true);
             verify(expenseMapper).findNetBalancesByRoomId(roomId);
@@ -139,6 +143,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(0);
 
             // when & then
@@ -146,6 +151,7 @@ public class SettlementServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("정산할 지출 내역이 존재하지 않습니다.");
 
+            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(roomMapper, never()).updateRoomLockStatus(anyLong(), anyBoolean());
             verify(settlementMapper, never()).insertSettlements(anyList());
         }
@@ -162,6 +168,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
 
             // when & then
             assertThatThrownBy(() -> settlementService.executeSettlement(slug, memberId))
@@ -181,6 +188,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
 
             // when & then
             assertThatThrownBy(() -> settlementService.executeSettlement(slug, memberId))
@@ -200,6 +208,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
+            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(1);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(0);
 
