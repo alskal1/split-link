@@ -393,6 +393,7 @@ export default function ExpenseAddSheet({
             }
             placeholder="송금받을 계좌번호"
             inputMode="numeric"
+            maxLength={20}
             className="w-full rounded-xl border-[1.5px] border-line bg-white px-3.5 py-3 text-[15px] outline-none placeholder:text-[#b5b3ad] focus:border-brand"
           />
         </div>

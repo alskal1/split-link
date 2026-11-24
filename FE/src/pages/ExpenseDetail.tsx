@@ -387,6 +387,7 @@ export default function ExpenseDetail({
                 className={`${fieldClass} min-w-0`}
                 inputMode="numeric"
                 placeholder="계좌번호"
+                maxLength={20}
                 value={accountNumber}
                 onChange={(e) =>
                   setAccountNumber(e.target.value.replace(/[^0-9-]/g, ""))

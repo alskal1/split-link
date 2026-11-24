@@ -154,6 +154,7 @@ export default function ExpenseForm({
             <Input
               className="flex-1"
               placeholder="계좌번호"
+              maxLength={20}
               value={group.accountNumber}
               onChange={(e) =>
                 onChange({ ...group, accountNumber: e.target.value })
