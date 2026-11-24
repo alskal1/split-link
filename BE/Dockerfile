@@ -1,11 +1,11 @@
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM maven:3.9.9-eclipse-temurin-17-alpine AS builder
 WORKDIR /app
-COPY . .
-RUN chmod +x ./mvnw
-RUN ./mvnw clean package -DskipTests
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-ENV TZ=Asia/Seoul
 COPY --from=builder /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV TZ=Asia/Seoul
+ENTRYPOINT ["java", "-Xmx350m", "-jar", "app.jar"]
