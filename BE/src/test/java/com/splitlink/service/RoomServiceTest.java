@@ -784,6 +784,36 @@ public class RoomServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
         }
+
+        @Test
+        @DisplayName("예외: 이미 정산이 완료(isClosed=true)된 방은 수정 요청 시 예외가 발생한다.")
+        void updateRoomThrowExceptionWhenRoomIsClosed() {
+            // given
+            RoomCreateResponse room = roomService.createRoom(RoomCreateRequest.builder()
+                    .title("마감 테스트방")
+                    .baseCurrency("KRW")
+                    .pin("1234")
+                    .memberNames(List.of("지용", "태양"))
+                    .build());
+
+            RoomDetailResponse detail = roomService.accessRoom(room.getSlug(), RoomAccessRequest.builder().pin("1234").build());
+            Long roomId = detail.getRoomId();
+            Long jiyongId = detail.getMembers().get(0).getMemberId();
+
+            roomMapper.updateIsClosedByRoomId(roomId, true);
+
+            RoomUpdateRequest updateRequest = RoomUpdateRequest.builder()
+                    .title("수정 시도")
+                    .baseCurrency("USD")
+                    .pin("1234")
+                    .members(List.of(RoomUpdateRequest.MemberRequest.builder().memberId(jiyongId).name("지용").build()))
+                    .build();
+
+            // when & then
+            assertThatThrownBy(() -> roomService.updateRoom(room.getSlug(), jiyongId, updateRequest))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
+        }
     }
 
     @Nested
