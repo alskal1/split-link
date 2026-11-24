@@ -129,6 +129,9 @@ export default function SettlementRoomAccess() {
         return;
       }
 
+      // 이전 입장코드 오류 토스트 제거
+      toast.dismiss("pin-error");
+
       // 인증 완료 후 본인 멤버 선택 단계로 이동
       setMembers(data.members);
       setVerifiedPin(value);
@@ -136,7 +139,7 @@ export default function SettlementRoomAccess() {
       setStep("select-member");
     } catch (error) {
       if (!isCancelled()) {
-        toast.error("입장코드가 올바르지 않아요");
+        toast.error("입장코드가 올바르지 않아요", { id: "pin-error" });
       }
     } finally {
       if (!isCancelled()) {
