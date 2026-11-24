@@ -5,8 +5,7 @@ import type { ChangeEvent, KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 import { deleteRoom, updateRoom } from "../api/room";
 import BottomSheet from "../components/BottomSheet";
-import ConfirmModal from "../components/ConfirmModal";
-import type { RoomMemberResponse } from "../types/roomType";
+import ConfirmModal from "../components/ConfirmModal";import type { RoomMemberResponse } from "../types/roomType";
 import type { ExpenseFormMemberInfo } from "../types/expenseType";
 
 /**
@@ -312,18 +311,34 @@ export default function SettlementRoomSetting({
 
         <div className="mb-[18px]">
           <div className={labelClass}>기준 통화</div>
-          <select
-            className={`${inputClass} font-semibold`}
-            value={baseCurrency}
-            onChange={(e) => setBaseCurrency(e.target.value)}
-            disabled={expenseCount > 0}
-          >
-            {BASE_CURRENCY_CARDS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.symbol} {c.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              className={`${inputClass} cursor-pointer appearance-none pr-10 font-semibold disabled:cursor-not-allowed`}
+              value={baseCurrency}
+              onChange={(e) => setBaseCurrency(e.target.value)}
+              disabled={expenseCount > 0}
+            >
+              {BASE_CURRENCY_CARDS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.symbol} {c.label}
+                </option>
+              ))}
+            </select>
+            <svg
+              className={`pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-ink-soft ${
+                expenseCount > 0 ? "opacity-50" : ""
+              }`}
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 7.5l5 5 5-5" />
+            </svg>
+          </div>
           {expenseCount > 0 && (
             <div className="mt-2 text-xs text-ink-soft">
               결제내역이 있어 기준 통화를 변경할 수 없어요.
