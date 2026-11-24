@@ -126,7 +126,10 @@ public class RoomService {
         Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
 
         // 지출 등록/수정/삭제 요청과의 경쟁 조건(Race Condition)을 방지
-        roomMapper.findRoomByIdForUpdate(roomId);
+        Room lockedRoom = roomMapper.findRoomByIdForUpdate(roomId);
+        if (lockedRoom.isLocked() || lockedRoom.isClosed()) {
+            throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
+        }
 
         // newPin 변경 요청이 있는 경우에만 유효성 검사 및 targetPin 변경
         String targetPin = sanitizedPin;
