@@ -121,12 +121,17 @@ public class RoomService {
     public RoomDetailResponse updateRoom(String slug, Long memberId, RoomUpdateRequest request) {
         log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
+        // 트랜잭션 첫 쿼리로 방 행에 비관적 락 획득 (스냅샷 고정 방지)
+        Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
+        if (lockedRoom == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
+        }
+
         // 입장코드 및 입력값 유효성 검사
         String sanitizedPin = request.getPin().trim();
         Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
 
-        // 지출 등록/수정/삭제 요청과의 경쟁 조건(Race Condition)을 방지
-        Room lockedRoom = roomMapper.findRoomByIdForUpdate(roomId);
+        // 정산 시작/마감 여부 검증
         if (lockedRoom.isLocked() || lockedRoom.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방은 수정할 수 없습니다.");
         }
@@ -216,19 +221,19 @@ public class RoomService {
     public void deleteRoom(String slug, Long memberId, RoomAccessRequest request) {
         log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
-        // 방 존재 & PIN 일치 검증 후 roomId 획득
+        // 트랜잭션 첫 쿼리로 방 행에 비관적 락 획득 (스냅샷 고정 방지)
+        Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
+        if (lockedRoom == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나, 입장코드 또는 접근 권한이 유효하지 않습니다.");
+        }
+
+        // 방 존재 & PIN 일치 & 멤버 소속 검증
         String sanitizedPin = request.getPin().trim();
         Long roomId = roomAccessValidator.validatePinAndMemberAccess(slug, memberId, sanitizedPin);
 
-        // 삭제 전 지출 등록/수정 요청과의 경쟁 조건(Race Condition) 방지용 비관적 락 적용
-        roomMapper.findRoomByIdForUpdate(roomId);
-
-        // 방의 지출 건수 및 정산 마감 여부 조회
+        // 방의 지출 건수 조회 및 정산 마감 여부 검증 (락으로 조회한 lockedRoom.isClosed() 사용)
         int expenseCount = expenseMapper.countExpensesByRoomId(roomId);
-        Boolean isClosed = roomMapper.findIsClosedBySlug(slug);
-
-        // 삭제 조건 검증 (지출 내역이 1건 이상 존재하는 경우 반드시 정산 마감 상태여야 함)
-        if (expenseCount > 0 && !Boolean.TRUE.equals(isClosed)) {
+        if (expenseCount > 0 && !lockedRoom.isClosed()) {
             throw new IllegalArgumentException("해당 방의 정산이 남았습니다. 모든 정산이 완료된 후 삭제할 수 있습니다.");
         }
 

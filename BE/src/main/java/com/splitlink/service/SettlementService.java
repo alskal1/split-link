@@ -46,11 +46,16 @@ public class SettlementService {
     @Transactional
     public void executeSettlement(String slug, Long memberId) {
 
-        // 방 접근 권한 및 방 조회
+        // 트랜잭션 첫 쿼리로 방 행에 배타적 락(FOR UPDATE) 획득 (스냅샷 고정 방지)
+        Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
+        if (lockedRoom == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
+        }
+
+        // 방 접근 권한 검증
         Room room = roomAccessValidator.validateAndGetRoom(slug, memberId);
 
-        // 방 행에 배타적 락(FOR UPDATE) 획득 후 최신 상태 재조회
-        Room lockedRoom = roomMapper.findRoomByIdForUpdate(room.getRoomId());
+        // 락으로 조회한 최신 상태 검증
         if (lockedRoom.isLocked() || lockedRoom.isClosed()) {
             throw new IllegalArgumentException("이미 정산이 실행되었거나 마감된 방입니다.");
         }
@@ -140,11 +145,14 @@ public class SettlementService {
     @Transactional
     public void updateRemittanceStatus(String slug, Long settlementId, Long memberId, RemittanceStatusUpdateRequest request) {
 
+        // 트랜잭션 첫 쿼리로 방 행에 비관적 락(FOR UPDATE) 획득 (스냅샷 고정 방지)
+        Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
+        if (lockedRoom == null) {
+            throw new IllegalArgumentException("해당 방이 존재하지 않거나, 해당 방에 접근 권한이 없습니다.");
+        }
+
         // 방 존재 여부 및 접근 권한 검증 -> roomId 반환
         Long roomId = roomAccessValidator.validateAndGetRoomId(slug, memberId);
-
-        // 동시성 제어를 위한 방 단위 비관적 락(줄서기) 획득
-        roomMapper.findRoomByIdForUpdate(roomId);
 
         // DB UPDATE 수행 (해당 정산 건의 송금자 OR 수금자인 경우에만 is_done 업데이트)
         int updatedRows = settlementMapper.updateRemittanceStatus(
@@ -154,7 +162,6 @@ public class SettlementService {
                 request.getIsDone()
         );
 
-        // 영향받은 행이 없다면 존재하지 않거나 권한이 없는 정산 건
         if (updatedRows != 1) {
             throw new IllegalArgumentException("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
         }

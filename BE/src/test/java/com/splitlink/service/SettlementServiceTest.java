@@ -73,7 +73,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(3);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(1);
 
@@ -89,7 +89,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(expenseMapper).countExpensesByRoomId(roomId);
             verify(roomMapper).updateRoomLockStatus(roomId, true);
             verify(expenseMapper).findNetBalancesByRoomId(roomId);
@@ -114,7 +114,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(1);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(1);
             given(expenseMapper.findNetBalancesByRoomId(roomId)).willReturn(Collections.emptyList());
@@ -124,7 +124,7 @@ public class SettlementServiceTest {
 
             // then
             verify(roomAccessValidator).validateAndGetRoom(slug, memberId);
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(expenseMapper).countExpensesByRoomId(roomId);
             verify(roomMapper).updateRoomLockStatus(roomId, true);
             verify(expenseMapper).findNetBalancesByRoomId(roomId);
@@ -143,7 +143,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(0);
 
             // when & then
@@ -151,7 +151,7 @@ public class SettlementServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("정산할 지출 내역이 존재하지 않습니다.");
 
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(roomMapper, never()).updateRoomLockStatus(anyLong(), anyBoolean());
             verify(settlementMapper, never()).insertSettlements(anyList());
         }
@@ -168,7 +168,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
 
             // when & then
             assertThatThrownBy(() -> settlementService.executeSettlement(slug, memberId))
@@ -188,7 +188,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
 
             // when & then
             assertThatThrownBy(() -> settlementService.executeSettlement(slug, memberId))
@@ -208,7 +208,7 @@ public class SettlementServiceTest {
                     .build();
 
             given(roomAccessValidator.validateAndGetRoom(slug, memberId)).willReturn(room);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(room);
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(room);
             given(expenseMapper.countExpensesByRoomId(roomId)).willReturn(1);
             given(roomMapper.updateRoomLockStatus(roomId, true)).willReturn(0);
 
@@ -419,8 +419,8 @@ public class SettlementServiceTest {
             // given
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(new Room());
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
             given(settlementMapper.countRemainSettlements(roomId)).willReturn(2);
             given(roomMapper.updateIsClosedByRoomId(roomId, false)).willReturn(1);
@@ -429,8 +429,8 @@ public class SettlementServiceTest {
             settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
 
             // then
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper).countRemainSettlements(roomId);
             verify(roomMapper).updateIsClosedByRoomId(roomId, false);
@@ -442,8 +442,8 @@ public class SettlementServiceTest {
             // given
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(new Room());
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(1);
             given(settlementMapper.countRemainSettlements(roomId)).willReturn(0);
             given(roomMapper.updateIsClosedByRoomId(roomId, true)).willReturn(1);
@@ -452,8 +452,8 @@ public class SettlementServiceTest {
             settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
 
             // then
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper).countRemainSettlements(roomId);
             verify(roomMapper).updateIsClosedByRoomId(roomId, true);
@@ -465,8 +465,8 @@ public class SettlementServiceTest {
             // given
             RemittanceStatusUpdateRequest request = new RemittanceStatusUpdateRequest(true);
 
+            given(roomMapper.findRoomBySlugForUpdate(slug)).willReturn(new Room());
             given(roomAccessValidator.validateAndGetRoomId(slug, memberId)).willReturn(roomId);
-            given(roomMapper.findRoomByIdForUpdate(roomId)).willReturn(new Room());
             given(settlementMapper.updateRemittanceStatus(roomId, settlementId, memberId, true)).willReturn(0);
 
             // when & then
@@ -474,8 +474,8 @@ public class SettlementServiceTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("존재하지 않거나 수정 권한이 없는 정산 내역입니다.");
 
+            verify(roomMapper).findRoomBySlugForUpdate(slug);
             verify(roomAccessValidator).validateAndGetRoomId(slug, memberId);
-            verify(roomMapper).findRoomByIdForUpdate(roomId);
             verify(settlementMapper).updateRemittanceStatus(roomId, settlementId, memberId, true);
             verify(settlementMapper, never()).countRemainSettlements(anyLong());
             verify(roomMapper, never()).updateIsClosedByRoomId(anyLong(), anyBoolean());
