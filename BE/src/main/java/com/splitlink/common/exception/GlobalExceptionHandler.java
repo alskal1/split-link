@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -91,20 +92,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 서버 내부 예기치 못한 최상위 예외 처리 (HTTP 500 Internal Server Error)
-     *
-     * @param e Exception 객체
-     * @return 500 상태 코드와 공통 에러 메시지를 담은 ApiResponse
-     */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleAllException(Exception e) {
-        log.error("Unexpected Server Error: ", e);
-
-        ApiResponse<Void> response = ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "서버 내부 오류가 발생했습니다.");
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-    }
-
-    /**
      * HTTP Request Body 누락 및 JSON 파싱 실패 예외 처리 (HTTP 400 Bad Request)
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -117,5 +104,37 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 존재하지 않는 정적 리소스 및 경로 요청 예외 처리 (HTTP 404 Not Found)
+     *
+     * @param e NoResourceFoundException 객체
+     * @return 404 상태 코드와 에러 메시지를 담은 ApiResponse
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(NoResourceFoundException e) {
+        log.debug("No Resource Found: {}", e.getResourcePath());
+
+        ApiResponse<Void> response = ApiResponse.error(
+                HttpStatus.NOT_FOUND.value(),
+                "요청하신 리소스를 찾을 수 없습니다."
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
+     * 서버 내부 예기치 못한 최상위 예외 처리 (HTTP 500 Internal Server Error)
+     *
+     * @param e Exception 객체
+     * @return 500 상태 코드와 공통 에러 메시지를 담은 ApiResponse
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleAllException(Exception e) {
+        log.error("Unexpected Server Error: ", e);
+
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "서버 내부 오류가 발생했습니다.");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }
