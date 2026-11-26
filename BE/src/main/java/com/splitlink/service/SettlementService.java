@@ -78,6 +78,11 @@ public class SettlementService {
         if (calculatedSettlements != null && !calculatedSettlements.isEmpty()) {
             settlementMapper.insertSettlements(calculatedSettlements);
         }
+
+        int transferCount = (calculatedSettlements != null) ? calculatedSettlements.size() : 0;
+
+        log.info("[Settlement Executed] roomId: {}, slug: {}, executedByMemberId: {}, transferCount: {}",
+                room.getRoomId(), slug, memberId, transferCount);
     }
 
     /**
@@ -172,6 +177,11 @@ public class SettlementService {
         // 남은 건수가 0개이면 isClosed = true, 1개 이상이면 isClosed = false
         boolean isClosed = (remainSettlementsCount == 0);
         roomMapper.updateIsClosedByRoomId(roomId, isClosed);
+
+        if (isClosed) {
+            log.info("[Room Closed] All remittances completed - roomId: {}, slug: {}, completedByMemberId: {}",
+                    roomId, slug, memberId);
+        }
     }
 
     /**

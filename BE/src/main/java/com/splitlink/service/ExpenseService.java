@@ -172,6 +172,13 @@ public class ExpenseService {
                 expenseMapper.insertExpenseShares(shares);
             }
         }
+
+        int totalItemCount = request.getExpenseGroups().stream()
+                .mapToInt(group -> group.getItems().size())
+                .sum();
+
+        log.info("[Expenses Created] roomId: {}, slug: {}, createdByMemberId: {}, itemCount: {}",
+                roomId, slug, memberId, totalItemCount);
     }
 
     /**
@@ -471,6 +478,9 @@ public class ExpenseService {
         if (deletedRows == 0) {
             throw new IllegalArgumentException("해당 방에 존재하지 않는 지출이거나 이미 삭제된 지출입니다.");
         }
+
+        log.info("[Expense Deleted] roomId: {}, slug: {}, expenseId: {}, deletedByMemberId: {}",
+                roomId, slug, expenseId, memberId);
     }
 
     /**
@@ -509,9 +519,6 @@ public class ExpenseService {
 
     /**
      * 통화 별 소수점 자리 맞추기
-     *
-     * @param currency
-     * @return
      */
     private int getCurrencyScale(String currency) {
         return switch (currency) {
@@ -523,11 +530,6 @@ public class ExpenseService {
 
     /**
      * 방 기준 통화로 총 금액 계산
-     *
-     * @param amount
-     * @param fxRate
-     * @param baseCurrency
-     * @return
      */
     private BigDecimal convertToBaseCurrency(BigDecimal amount, BigDecimal fxRate, String baseCurrency) {
         return amount.multiply(fxRate)

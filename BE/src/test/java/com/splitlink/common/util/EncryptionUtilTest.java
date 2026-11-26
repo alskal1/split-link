@@ -1,6 +1,5 @@
 package com.splitlink.common.util;
 
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Slf4j
 public class EncryptionUtilTest {
 
     private EncryptionUtil encryptionUtil;
@@ -32,9 +30,6 @@ public class EncryptionUtilTest {
         String encryptedAccount = encryptionUtil.encrypt(rawAccountNumber);
 
         // then (암호화 검증)
-        log.info("원본 계좌번호: {}", rawAccountNumber);
-        log.info("암호화된 계좌번호: {}", encryptedAccount);
-
         assertThat(encryptedAccount).isNotNull();
         assertThat(encryptedAccount).isNotEqualTo(rawAccountNumber); // 원본과 달라야 함
 
@@ -42,7 +37,6 @@ public class EncryptionUtilTest {
         String decryptedAccount = encryptionUtil.decrypt(encryptedAccount);
 
         // then (복호화 검증)
-        log.info("복호화된 계좌번호: {}", decryptedAccount);
         assertThat(decryptedAccount).isEqualTo(rawAccountNumber); // 원본과 같아야 함
     }
 

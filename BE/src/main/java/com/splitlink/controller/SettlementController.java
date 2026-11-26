@@ -7,11 +7,9 @@ import com.splitlink.dto.response.RoomMySettlementResponse;
 import com.splitlink.service.SettlementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/rooms/{slug}/settlements")
 @RequiredArgsConstructor
@@ -28,8 +26,6 @@ public class SettlementController {
             @PathVariable String slug,
             @AuthMember Long memberId) {
 
-        log.info(">>>> [Settlement Execution] slug: {}, memberId: {}", slug, memberId);
-
         settlementService.executeSettlement(slug, memberId);
 
         return ResponseEntity.ok(ApiResponse.success(null));
@@ -43,7 +39,6 @@ public class SettlementController {
     public ResponseEntity<ApiResponse<RoomMySettlementResponse>> getMySettlement(
             @PathVariable String slug,
             @AuthMember Long memberId) {
-        log.info(">>>> [Get My Settlement] slug: {}, memberId: {}", slug, memberId);
 
         RoomMySettlementResponse response = settlementService.getMySettlement(slug, memberId);
 
@@ -59,9 +54,6 @@ public class SettlementController {
             @PathVariable Long settlementId,
             @AuthMember Long memberId,
             @Valid @RequestBody RemittanceStatusUpdateRequest request) {
-
-        log.info(">>>> [Update Remittance Status] slug: {}, settlementId: {}, memberId: {}, isDone: {}",
-                slug, settlementId, memberId, request.getIsDone());
 
         settlementService.updateRemittanceStatus(slug, settlementId, memberId, request);
 

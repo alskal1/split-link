@@ -31,8 +31,6 @@ public class ExchangeRateApiCacheClient {
             unless = "#result == null"  // null 결과는 캐시에 저장하지 않음 (캐시 오염 방지)
     )
     public BigDecimal fetchHistoricalRate(String datePath, String cacheKeyDate, String from, String to) {
-        log.info("========== [CACHE MISS] 캐시에 데이터가 없어 실제 API 호출 진행 -> DatePath: {}, KeyDate: {}, From: {}, To: {} ==========",
-                datePath, cacheKeyDate, from, to);
         return fetchRateFromApi(datePath, from, to);
     }
 
@@ -46,7 +44,7 @@ public class ExchangeRateApiCacheClient {
                 to.trim().toUpperCase());
 
         try {
-            log.info("[Frankfurter API 호출 시도] URL: {}", url);
+            log.info("[Frankfurter API] Requesting URL: {}", url);
 
             ResponseEntity<String> response = restClient.get()
                     .uri(url)

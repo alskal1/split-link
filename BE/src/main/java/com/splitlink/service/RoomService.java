@@ -40,7 +40,6 @@ public class RoomService {
      */
     @Transactional
     public RoomCreateResponse createRoom(RoomCreateRequest request) {
-        log.info("RoomService:createRoom 진입");
 
         // 참여자 이름 유효성 검증
         List<String> sanitizedMembers = validateAndSanitizeMembers(request.getMemberNames());
@@ -63,6 +62,9 @@ public class RoomService {
         // 3. 참여자 등록
         memberMapper.insertMembers(room.getRoomId(), sanitizedMembers);
 
+        log.info("[Room Created] roomId: {}, slug: {}, baseCurrency: {}, memberCount: {}",
+                room.getRoomId(), slug, sanitizedCurrency, sanitizedMembers.size());
+
         // 4. 응답 반환
         return RoomCreateResponse.builder()
                 .slug(slug)
@@ -78,7 +80,6 @@ public class RoomService {
      */
     @Transactional(readOnly = true)
     public RoomSummaryResponse getRoomSummary(String slug) {
-        log.info("RoomService:getRoomSummary 진입 - slug: {}", slug);
 
         // slug 기준 요약 정보 조회
         RoomSummaryResponse response = roomMapper.findSummaryBySlug(slug);
@@ -98,7 +99,6 @@ public class RoomService {
      */
     @Transactional(readOnly = true)
     public RoomDetailResponse accessRoom(String slug, RoomAccessRequest request) {
-        log.info("RoomService:accessRoom 진입- slug: {}", slug);
 
         // 1. 입장코드 검증
         validatePin(slug, request.getPin());
@@ -119,7 +119,6 @@ public class RoomService {
      */
     @Transactional
     public RoomDetailResponse updateRoom(String slug, Long memberId, RoomUpdateRequest request) {
-        log.info("RoomService:updateRoom 진입 - slug: {}", slug);
 
         // 트랜잭션 첫 쿼리로 방 행에 비관적 락 획득 (스냅샷 고정 방지)
         Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
@@ -219,7 +218,6 @@ public class RoomService {
      */
     @Transactional
     public void deleteRoom(String slug, Long memberId, RoomAccessRequest request) {
-        log.info("RoomService:deleteRoom 진입 - slug: {}", slug);
 
         // 트랜잭션 첫 쿼리로 방 행에 비관적 락 획득 (스냅샷 고정 방지)
         Room lockedRoom = roomMapper.findRoomBySlugForUpdate(slug);
@@ -242,13 +240,15 @@ public class RoomService {
         if (deletedRows != 1) {
             throw new IllegalArgumentException("존재하지 않거나 삭제할 수 없는 방입니다.");
         }
+
+        log.info("[Room Deleted] roomId: {}, slug: {}, deletedByMemberId: {}",
+                roomId, slug, memberId);
     }
 
     /**
      * 방 존재 여부 및 입장코드 검증 공통 메서드
      */
     private void validatePin(String slug, String inputPin) {
-        log.info("RoomService:validatePin 진입 - slug: {}", slug);
 
         String realPin = roomMapper.findPinBySlug(slug);
         if (realPin == null) {
@@ -264,7 +264,6 @@ public class RoomService {
      * 멤버 이름 목록의 공백을 제거하고 유효성 및 중복 여부를 검증
      */
     private List<String> validateAndSanitizeMembers(List<String> rawMemberNames) {
-        log.info("RoomService:validateAndSanitizeMembers 진입");
 
         // 1. null 또는 빈 리스트 우선 검증
         if (rawMemberNames == null || rawMemberNames.isEmpty()) {
@@ -295,7 +294,6 @@ public class RoomService {
      * [방 수정 전용] MemberRequest 목록의 공백을 제거(trim)하고 방 내 중복 이름 여부를 검증
      */
     private List<RoomUpdateRequest.MemberRequest> sanitizeMemberRequests(List<RoomUpdateRequest.MemberRequest> rawRequests) {
-        log.info("RoomService:sanitizeMemberRequests 진입");
 
         if (rawRequests == null || rawRequests.isEmpty()) {
             throw new IllegalArgumentException("멤버를 최소 한 명 이상 입력해야 합니다.");
