@@ -11,7 +11,6 @@ import com.splitlink.dto.response.ExpenseUpdateFormResponse;
 import com.splitlink.service.ExpenseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 지출(Expense) 관련 API 요청을 처리하는 컨트롤러
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/rooms/{slug}/expenses")
 @RequiredArgsConstructor
@@ -34,7 +32,6 @@ public class ExpenseController {
     public ResponseEntity<ApiResponse<ExpenseFormInitResponse>> getExpenseFormInit(
             @PathVariable String slug,
             @AuthMember Long memberId) {
-        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
         ExpenseFormInitResponse response = expenseService.getExpenseFormInit(slug, memberId);
 
@@ -49,7 +46,6 @@ public class ExpenseController {
             @PathVariable String slug,
             @AuthMember Long memberId,
             @Valid @RequestBody ExpenseBatchCreateRequest request) {
-        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
         expenseService.createExpenses(slug, memberId, request);
 
@@ -64,7 +60,6 @@ public class ExpenseController {
     public ResponseEntity<ApiResponse<ExpenseListResponse>> getExpenseList(
             @PathVariable String slug,
             @AuthMember Long memberId) {
-        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
         ExpenseListResponse response = expenseService.getExpenseList(slug, memberId);
 
@@ -79,7 +74,6 @@ public class ExpenseController {
             @PathVariable String slug,
             @PathVariable Long expenseId,
             @AuthMember Long memberId) {
-        log.info(">>>> [JWT Auth Success] slug: {}, memberId: {}", slug, memberId);
 
         ExpenseDetailResponse response = expenseService.getExpenseDetail(slug, expenseId, memberId);
 
@@ -94,8 +88,6 @@ public class ExpenseController {
             @PathVariable String slug,
             @PathVariable Long expenseId,
             @AuthMember Long memberId) {
-
-        log.info(">>>> [JWT Auth Success] slug: {}, expenseId: {}, memberId: {}", slug, expenseId, memberId);
 
         ExpenseUpdateFormResponse response = expenseService.getExpenseUpdateForm(slug, expenseId, memberId);
 
@@ -112,8 +104,6 @@ public class ExpenseController {
             @AuthMember Long memberId,
             @Valid @RequestBody ExpenseUpdateRequest request) {
 
-        log.info(">>>> [JWT Auth Success] slug: {}, expenseId: {}, memberId: {}", slug, expenseId, memberId);
-
         expenseService.updateExpense(slug, expenseId, memberId, request);
 
         return ResponseEntity.ok(ApiResponse.success(null));
@@ -127,8 +117,6 @@ public class ExpenseController {
             @PathVariable String slug,
             @PathVariable Long expenseId,
             @AuthMember Long memberId) {
-
-        log.info(">>>> [JWT Auth Success] slug: {}, expenseId: {}, memberId: {}", slug, expenseId, memberId);
 
         expenseService.deleteExpense(slug, expenseId, memberId);
 

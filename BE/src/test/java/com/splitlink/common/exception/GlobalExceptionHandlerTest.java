@@ -3,11 +3,13 @@ package com.splitlink.common.exception;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,6 +25,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/items/{id}")
         public String getItem(@PathVariable Long id) {
             return "ok";
+        }
+
+        @GetMapping("/test/no-resource")
+        public String throwNoResource() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "/test/no-resource");
         }
     }
 
@@ -41,6 +48,17 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("요청 파라미터 형식이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("NoResourceFoundException 발생 시 404 Not Found와 ApiResponse 에러 형식을 반환한다.")
+    void handleNoResourceFoundException() throws Exception {
+        mockMvc.perform(get("/test/no-resource"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("요청하신 리소스를 찾을 수 없습니다."))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 }

@@ -28,7 +28,6 @@ public class MemberService {
      */
     @Transactional
     public SelectMemberResponse selectMember(String slug, Long memberId) {
-        log.info("MemberService:selectMember 진입 - slug: {}, memberId: {}", slug, memberId);
 
         // 1. 방 및 멤버 소속 검증
         RoomDetailResponse roomDetail = roomMapper.findDetailBySlug(slug);
@@ -50,6 +49,9 @@ public class MemberService {
 
         // 3. 토큰 발급 및 리턴
         String accessToken = jwtProvider.createToken(roomDetail.getRoomId(), memberId);
+
+        log.info("[Member Selected] roomId: {}, slug: {}, memberId: {}",
+                roomDetail.getRoomId(), slug, memberId);
 
         return new SelectMemberResponse(
                 accessToken,

@@ -11,7 +11,6 @@ import com.splitlink.dto.response.RoomSummaryResponse;
 import com.splitlink.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 /**
 * 방(Room) 관련 API 요청을 처리하는 컨트롤러
 * */
-@Slf4j
 @RestController
 @RequestMapping("/api/rooms")
 @RequiredArgsConstructor
@@ -32,7 +30,6 @@ public class RoomController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<RoomCreateResponse>> createRoom(@Valid @RequestBody RoomCreateRequest request) {
-        log.info("RoomController:createRoom 진입");
 
         RoomCreateResponse response = roomService.createRoom(request);
 
@@ -45,7 +42,6 @@ public class RoomController {
      */
     @GetMapping("/{slug}/summary")
     public ResponseEntity<ApiResponse<RoomSummaryResponse>> getRoomSummary(@PathVariable String slug) {
-        log.info("RoomController:getRoomSummary 진입 - slug: {}", slug);
 
         RoomSummaryResponse response = roomService.getRoomSummary(slug);
 
@@ -59,7 +55,6 @@ public class RoomController {
     public ResponseEntity<ApiResponse<RoomDetailResponse>> getRoomAccess(
             @PathVariable String slug,
             @Valid @RequestBody RoomAccessRequest request) {
-        log.info("RoomController:getRoomAccess 진입 - slug: {}", slug);
 
         RoomDetailResponse response = roomService.accessRoom(slug, request);
 
@@ -75,7 +70,6 @@ public class RoomController {
             @PathVariable String slug,
             @AuthMember Long memberId,
             @Valid @RequestBody RoomUpdateRequest request) {
-        log.info("RoomController:updateRoom 진입 - slug: {}", slug);
 
         RoomDetailResponse response = roomService.updateRoom(slug, memberId, request);
 
@@ -91,7 +85,6 @@ public class RoomController {
             @PathVariable String slug,
             @AuthMember Long memberId,
             @Valid @RequestBody RoomAccessRequest request) {
-        log.info("RoomController:deleteRoom 진입 - slug: {}", slug);
 
         roomService.deleteRoom(slug, memberId, request);
 
